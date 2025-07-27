@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import toast from 'react-hot-toast';
+import PropTypes from 'prop-types';
 import { DB_CONFIG } from '../../config/dbConfig.js';
 import { XCircleIcon } from './Icons.jsx';
 import { cn } from '../../utils/cn.js';
@@ -23,7 +23,7 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated, irreleva
     };
 
     return (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-50 flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 z-50 flex justify-center items-center p-4">
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md">
                 <div className="p-6 border-b border-gray-200">
                     <div className="flex justify-between items-start">
@@ -47,7 +47,7 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated, irreleva
                                             />
                                         </div>
                                         <div className="ml-3 text-sm leading-6">
-                                            <label htmlFor={`export-${dbKey}`} className="font-medium text-gray-900">{DB_CONFIG[dbKey].name}</label>
+                                            <label htmlFor={`export-${dbKey}`} className="font-medium text-gray-900">{DB_CONFIG[dbKey]?.name || dbKey}</label>
                                         </div>
                                     </div>
                                 ))}
@@ -88,5 +88,13 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated, irreleva
         </div>
     );
 }
+
+ExportModal.propTypes = {
+    onClose: PropTypes.func.isRequired,
+    onExport: PropTypes.func.isRequired,
+    allArticles: PropTypes.arrayOf(PropTypes.object).isRequired,
+    hasDeduplicated: PropTypes.bool.isRequired,
+    irrelevantArticles: PropTypes.instanceOf(Set).isRequired,
+};
 
 export default ExportModal;

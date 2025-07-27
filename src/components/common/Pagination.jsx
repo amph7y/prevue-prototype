@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 
 function Pagination({ currentPage, totalPages, onPageChange }) {
     if (totalPages <= 1) return null;
@@ -25,5 +26,11 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
         </nav>
     );
 }
+
+Pagination.propTypes = {
+    currentPage: PropTypes.number.isRequired,
+    totalPages: PropTypes.number.isRequired,
+    onPageChange: PropTypes.func.isRequired,
+};
 
 export default Pagination;

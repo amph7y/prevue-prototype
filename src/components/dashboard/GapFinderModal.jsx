@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import PropTypes from 'prop-types';
 import { callGeminiAPI } from '../../api/geminiApi.js';
 import { XCircleIcon, SearchIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
@@ -58,5 +59,9 @@ function GapFinderModal({ onClose }) {
         </div>
     );
 }
+
+GapFinderModal.propTypes = {
+    onClose: PropTypes.func.isRequired,
+};
 
 export default GapFinderModal;

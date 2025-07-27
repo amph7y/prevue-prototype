@@ -10,7 +10,7 @@ export const DB_CONFIG = {
         syntax: {
             phrase: (term, field) => `"${term}"[${field}]`,
             mesh: (term) => `"${term}"[MeSH Terms]`,
-            emtree: (term) => `"${term}"[tw]`,
+            emtree: (term) => `"${term}"[tw]`, // Fallback for Emtree in PubMed
             separator: ' AND ',
             not: 'NOT'
         }
@@ -25,71 +25,27 @@ export const DB_CONFIG = {
         },
         syntax: {
             field: (term, field) => `${field}(${term})`,
-            phrase: (term, field) => `"${term}"`, // Corrected for basic API keys
+            phrase: (term, field) => `${field}("${term}")`,
             exactPhrase: (term, field) => `{${term}}`,
-            proximity: (term1, term2, dist) => `"${term1}" W/${dist} "${term2}"`,
-            precedes: (term1, term2, dist) => `"${term1}" PRE/${dist} "${term2}"`,
-            separator: ' AND ',
+            proximity: (term1, term2, dist) => `TITLE-ABS-KEY("${term1}" W/${dist} "${term2}")`,
+            separator: 'AND',
             not: 'AND NOT'
         }
     },
     embase: {
         name: 'Embase',
         searchFields: {
-            'ti,ab,kw': 'Title/Abstract/Keyword',
-            'mp': 'All Fields (Multi-purpose)',
-            'ti': 'Title Only',
-            'ab': 'Abstract Only'
-        },
-        syntax: {
-            phrase: (term, field) => `'${term}':${field}`,
-            mesh: (term) => `'${term}':ti,ab`,
-            emtree: (term) => `'${term}'/exp`,
-            separator: ' AND ',
-            not: 'NOT'
-        }
-    },
-    googleScholar: {
-        name: 'Google Scholar',
-        searchFields: {
-            'all': 'All Fields',
-            'intitle': 'Title Only'
-        },
-        syntax: {
-            phrase: (term, field) => field === 'intitle' ? `intitle:"${term}"` : `"${term}"`,
-            mesh: (term) => `"${term}"`,
-            emtree: (term) => `"${term}"`,
-            separator: ' ',
-            not: '-'
-        }
-    },
-    semanticScholar: {
-        name: 'Semantic Scholar',
-        searchFields: {
-            'query': 'Title/Abstract'
-        },
-        syntax: {
-            phrase: (term) => `"${term}"`,
-            mesh: (term) => `"${term}"`,
-            emtree: (term) => `"${term}"`,
-            separator: ' ',
-            not: '-'
-        }
-    },
-    core: {
-        name: 'CORE',
-        searchFields: {
+            'title-abs-key': 'Title/Abstract/Keyword',
             'all': 'All Fields',
             'title': 'Title Only',
-            'abstract': 'Abstract Only',
-            'fullText': 'Full Text Only'
+            'abstract': 'Abstract Only'
         },
         syntax: {
-            phrase: (term, field) => field === 'all' ? `"${term}"` : `${field}:"${term}"`,
-            mesh: (term) => `"${term}"`,
-            emtree: (term) => `"${term}"`,
-            separator: ' AND ',
-            not: 'NOT'
+            phrase: (term, field) => `'${term}'/${field}`,
+            emtree: (term) => `'${term}'/exp`,
+            mesh: (term) => `'${term}'/de`, // Fallback for MeSH in Embase
+            separator: 'AND',
+            not: 'AND NOT'
         }
-    },
+    }
 };

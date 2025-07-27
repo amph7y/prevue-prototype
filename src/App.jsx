@@ -15,7 +15,7 @@ export default function App() {
     if (!auth) {
         setLoading(false);
         return;
-    };
+    }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import PropTypes from 'prop-types';
 import { callGeminiAPI } from '../../api/geminiApi.js';
 import { XCircleIcon, SparklesIcon, FolderPlusIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
@@ -74,5 +75,11 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
         </div>
     );
 }
+
+AiProjectCreationModal.propTypes = {
+    onClose: PropTypes.func.isRequired,
+    onCreateProject: PropTypes.func.isRequired,
+    isCreating: PropTypes.bool.isRequired,
+};
 
 export default AiProjectCreationModal;
