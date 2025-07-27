@@ -1,3 +1,11 @@
+# Google Gemini API Notes
+
+This project uses the Google Gemini API for the following features:
+
+-   Generating PICO frameworks from research questions.
+-   Generating keywords from PICO terms.
+-   Finding potential research gaps.
+
 # **AI Development Guidelines for React in Firebase Studio**
 
 These guidelines define the operational principles and capabilities of an AI agent (e.g., Gemini) interacting with React projects within the Firebase Studio environment. The goal is to enable an efficient, automated, and error-resilient application design and development workflow, focusing on modern React practices.
