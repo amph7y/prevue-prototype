@@ -10,7 +10,7 @@ export const DB_CONFIG = {
         syntax: {
             phrase: (term, field) => `"${term}"[${field}]`,
             mesh: (term) => `"${term}"[MeSH Terms]`,
-            emtree: (term) => `"${term}"[tw]`, // Fallback for Emtree in PubMed
+            emtree: (term) => `"${term}"[tw]`, // Fallback for Emtree terms in PubMed
             separator: ' AND ',
             not: 'NOT'
         }
@@ -24,28 +24,69 @@ export const DB_CONFIG = {
             'ABS': 'Abstract Only'
         },
         syntax: {
-            field: (term, field) => `${field}(${term})`,
+            // This syntax correctly uses the selected field, e.g., TITLE("term")
             phrase: (term, field) => `${field}("${term}")`,
-            exactPhrase: (term, field) => `{${term}}`,
-            proximity: (term1, term2, dist) => `TITLE-ABS-KEY("${term1}" W/${dist} "${term2}")`,
-            separator: 'AND',
+            mesh: (term, field) => `${field}("${term}")`, // Scopus uses generic field searches
+            emtree: (term, field) => `INDEXTERMS("${term}")`, // Scopus can search Emtree index terms
+            separator: ' AND ',
             not: 'AND NOT'
         }
     },
     embase: {
         name: 'Embase',
         searchFields: {
-            'title-abs-key': 'Title/Abstract/Keyword',
+            'ti,ab,kw': 'Title/Abstract/Keyword',
+            'mp': 'All Fields (Multi-purpose)',
+            'ti': 'Title Only',
+            'ab': 'Abstract Only'
+        },
+        syntax: {
+            // This syntax correctly uses the selected field, e.g., 'term':ti,ab,kw
+            phrase: (term, field) => `'${term}':${field}`,
+            mesh: (term, field) => `'${term}':${field}`, // Embase uses generic field searches
+            emtree: (term) => `'${term}'/exp`, // Embase has specific Emtree syntax
+            separator: ' AND ',
+            not: 'NOT'
+        }
+    },
+    googleScholar: {
+        name: 'Google Scholar',
+        searchFields: {
+            'all': 'All Fields',
+            'intitle': 'Title Only'
+        },
+        syntax: {
+            phrase: (term, field) => field === 'intitle' ? `intitle:"${term}"` : `"${term}"`,
+            mesh: (term) => `"${term}"`,
+            emtree: (term) => `"${term}"`,
+            separator: ' ',
+            not: '-'
+        }
+    },
+    semanticScholar: {
+        name: 'Semantic Scholar',
+        searchFields: { 'query': 'Title/Abstract' },
+        syntax: {
+            phrase: (term) => `"${term}"`,
+            mesh: (term) => `"${term}"`,
+            emtree: (term) => `"${term}"`,
+            separator: ' ',
+            not: '-'
+        }
+    },
+    core: {
+        name: 'CORE',
+        searchFields: {
             'all': 'All Fields',
             'title': 'Title Only',
             'abstract': 'Abstract Only'
         },
         syntax: {
-            phrase: (term, field) => `'${term}'/${field}`,
-            emtree: (term) => `'${term}'/exp`,
-            mesh: (term) => `'${term}'/de`, // Fallback for MeSH in Embase
-            separator: 'AND',
-            not: 'AND NOT'
+            phrase: (term, field) => field === 'all' ? `"${term}"` : `${field}:"${term}"`,
+            mesh: (term) => `"${term}"`,
+            emtree: (term) => `"${term}"`,
+            separator: ' AND ',
+            not: 'NOT'
         }
-    }
+    },
 };

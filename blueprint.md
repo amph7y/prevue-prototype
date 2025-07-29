@@ -15,16 +15,13 @@ This project is a React application integrated with Firebase, designed to assist
 ## Plan for PubMed Query Enhancement
 
 ### Purpose
-To optimize and expand the PubMed API integration in `src/api/pubmedApi.js` for more comprehensive data retrieval and better error handling.
+To create more comprehensive and effective PubMed search queries by combining both controlled vocabulary (MeSH terms) and keywords, instead of prioritizing one over the other.
 
 ### Steps
-1.  **Modify `fetchPubmed`:**
-    *   Make the `fetchPubmed` function more flexible to handle different `retmode` values (e.g., `xml` for `efetch`).
-    *   Add better error handling, including specific messages for network errors or API-specific issues.
-2.  **Add `getPubmedArticleDetails` function:**
-    *   Implement a new function `getPubmedArticleDetails` that uses `efetch.fcgi` to retrieve full article details (including abstracts) for a given list of PubMed IDs.
-3.  **Enhance `searchPubmed` function:**
-    *   Modify `searchPubmed` to optionally fetch full details using the new `getPubmedArticleDetails` function.
-    *   Add pagination support (`retstart` parameter).
-    *   Parse the XML response from `efetch` if full details are requested.
-4.  **Update Error Handling:** Ensure all API calls have robust `try-catch` blocks and informative error messages.
+1.  **Analyze `ProjectEditor.jsx`:** The component responsible for generating search queries is located at `src/components/editor/ProjectEditor.jsx`.
+2.  **Identify the Issue:** The `buildDbQuery` function within this component currently has a flawed logic. It checks for active MeSH terms and, if any are present, it exclusively uses them. Keywords are only used as a fallback if no MeSH terms are active for a given PICO category.
+3.  **Modify Query Generation Logic:**
+    *   Update the `buildDbQuery` function to ensure that for each PICO category, it combines both the active MeSH terms (from `controlled_vocabulary`) and the active keywords.
+    *   The MeSH terms and keywords for a single category should be joined with an `OR` operator to broaden the search.
+    *   The different PICO category groups will continue to be joined by an `AND` operator to ensure all concepts are present in the search results.
+4.  **Verify the Change:** After applying the fix, manually inspect the generated query to confirm it correctly includes both types of terms, resulting in a more robust and comprehensive search string.

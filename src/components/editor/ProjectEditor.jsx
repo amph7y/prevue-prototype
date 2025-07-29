@@ -226,24 +226,38 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         if (!keywords) return '';
         const { syntax } = DB_CONFIG[dbKey];
         const picoToKeywordMap = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
+    
         const parts = ['p', 'i', 'c', 'o'].map(catKey => {
             const keywordCategory = keywords[picoToKeywordMap[catKey]];
             if (!keywordCategory) return null;
+    
             let activeTerms = [];
+    
+            // OPTIMIZED LOGIC FOR PUBMED: Combine MeSH and Keywords with OR
             if (dbKey === 'pubmed') {
-                activeTerms = keywordCategory.controlled_vocabulary.filter(v => v.active && v.type.toLowerCase() === 'mesh').map(v => syntax.mesh(v.term));
-                if (activeTerms.length === 0) {
-                     activeTerms = keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, searchFieldOptions[dbKey]));
-                }
+                const meshTerms = keywordCategory.controlled_vocabulary
+                    .filter(v => v.active && v.type.toLowerCase() === 'mesh')
+                    .map(v => syntax.mesh(v.term));
+    
+                const keywordTerms = keywordCategory.keywords
+                    .filter(k => k.active)
+                    .map(k => syntax.phrase(k.term, searchFieldOptions[dbKey]));
+    
+                activeTerms = [...meshTerms, ...keywordTerms];
+    
             } else {
+            // ADVANCED LOGIC FOR ALL OTHER DATABASES
                 activeTerms = [
                     ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, searchFieldOptions[dbKey])),
                     ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, searchFieldOptions[dbKey]))
                 ];
             }
+    
             return activeTerms.length > 0 ? `(${activeTerms.join(' OR ')})` : null;
         }).filter(Boolean);
+    
         let finalQuery = parts.join(` ${syntax.separator} `);
+    
         const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
         if (activeNegative.length > 0) {
             const negativePart = activeNegative.map(k => `"${k}"`).join(' OR ');
@@ -257,9 +271,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const fetchAndSetCount = async (dbKey) => {
         const query = generateSingleQuery(dbKey);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
-        
         setSearchCounts(prev => ({ ...prev, [dbKey]: { ...prev[dbKey], loading: true } }));
-
         if (!query) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 0, loading: false } }));
             return;
@@ -268,7 +280,6 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             let count = 'N/A';
             if (dbKey === 'pubmed') count = await getPubmedCount(query);
             else if (dbKey === 'scopus' || dbKey === 'embase') count = await getElsevierCount(dbKey, query);
-            
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
         } catch (err) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'Error', loading: false } }));
@@ -299,41 +310,49 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     }, [step]);
     
     const handleRunSearch = async (isUpdate = false) => {
+        console.log("1. Search function started.");
         setIsSearching(true);
         if (!isUpdate) {
             setDeduplicationResult(null);
             setIrrelevantArticles(new Set());
         }
-        
+    
         const currentQueries = {};
         Object.keys(selectedDBs).forEach(dbKey => {
             if (selectedDBs[dbKey]) {
                 currentQueries[dbKey] = generateSingleQuery(dbKey);
             }
         });
+        console.log("2. Queries generated:", currentQueries);
         setQueries(currentQueries);
         setAllArticles([]);
         setSearchResults(null);
         let results = {};
         let allFetchedArticles = [];
-
+    
         for (const dbKey in currentQueries) {
+            console.log(`3. Searching ${dbKey}...`);
             try {
                 let articles = [];
                 if (dbKey === 'pubmed') articles = await searchPubmed(currentQueries[dbKey], retmax);
                 else if (dbKey === 'scopus' || dbKey === 'embase') articles = await searchElsevier(dbKey, currentQueries[dbKey], retmax);
-                
+    
+                console.log(`4. Found ${articles.length} articles from ${dbKey}.`);
                 results[dbKey] = { status: 'success', data: articles };
                 allFetchedArticles.push(...articles);
             } catch (err) {
+                console.error(`Error searching ${dbKey}:`, err);
                 results[dbKey] = { status: 'error', message: err.message };
                 toast.error(`Search failed for ${dbKey}: ${err.message}`);
             }
         }
+        console.log("5. All searches complete. Final results:", results);
         setSearchResults(results);
         setAllArticles(allFetchedArticles);
         setIsSearching(false);
+    
         if (!isUpdate) {
+            console.log("6. Navigating to Step 4.");
             setStep(4);
         }
     };

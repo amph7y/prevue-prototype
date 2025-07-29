@@ -30,5 +30,4 @@ This is a React-based application for streamlining the systematic review and lit
 
 2.  Run the development server:
     ```bash
-    npm run dev
-    ```
+d    ```

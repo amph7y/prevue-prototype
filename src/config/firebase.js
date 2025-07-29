@@ -1,8 +1,8 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import toast from 'react-hot-toast';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -15,10 +15,20 @@ const firebaseConfig = {
   measurementId: "G-C1QQQVJ2RQ"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app, auth, db, analytics;
 
-// Initialize and export the services your app will use
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const analytics = getAnalytics(app);
+try {
+    // Initialize Firebase
+    app = initializeApp(firebaseConfig);
+
+    // Initialize and export the services your app will use
+    auth = getAuth(app);
+    db = getFirestore(app);
+    analytics = getAnalytics(app);
+
+} catch (error) {
+    console.error("Firebase initialization failed:", error);
+    toast.error("Could not connect to the database. Please check your connection and refresh the page.");
+}
+
+export { app, auth, db, analytics };
