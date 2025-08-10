@@ -8,8 +8,9 @@ import { FolderPlusIcon, SearchIcon, SparklesIcon, LightBulbIcon } from '../comm
 import AiProjectCreationModal from './AiProjectCreationModal.jsx';
 import GapFinderModal from './GapFinderModal.jsx';
 import Spinner from '../common/Spinner.jsx';
+import Header from '../common/Header.jsx';
 
-function ProjectDashboard({ onSelectProject, userId }) {
+function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [newProjectName, setNewProjectName] = useState('');
@@ -78,7 +79,8 @@ function ProjectDashboard({ onSelectProject, userId }) {
             {isAiModalOpen && <AiProjectCreationModal onClose={() => setIsAiModalOpen(false)} onCreateProject={handleCreateProject} isCreating={isCreating} />}
             {isGapFinderModalOpen && <GapFinderModal onClose={() => setIsGapFinderModalOpen(false)} />}
 
-            <header className="bg-white shadow-sm"><div className="mx-auto max-w-7xl py-4 px-4 sm:px-6 lg:px-8"><h1 className="text-3xl font-bold tracking-tight text-gray-900">Project Dashboard</h1></div></header>
+            <Header title="Prevue" subtitle="Dashboard" onBackButtonClicked={onBackToLanding} backButtonText="Back to Home" />
+            
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="px-4 py-6 sm:px-0 space-y-8">

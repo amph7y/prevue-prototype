@@ -12,6 +12,7 @@ import { cn } from '../../utils/cn.js';
 import { callGeminiAPI } from '../../api/geminiApi.js';
 import { getPubmedCount, searchPubmed } from '../../api/pubmedApi.js';
 import { getElsevierCount, searchElsevier } from '../../api/elsevierApi.js';
+import { getCoreCount, searchCore } from '../../api/coreApi.js';
 
 // Child Components & Modals
 import PicoBuilder from './PicoBuilder.jsx';
@@ -24,6 +25,7 @@ import PicoSuggestionsModal from './PicoSuggestionsModal.jsx';
 import ThesaurusModal from './ThesaurusModal.jsx';
 import QueryRefinementModal from './QueryRefinementModal.jsx';
 import { HomeIcon, CheckIcon } from '../common/Icons.jsx';
+import Header from '../common/Header.jsx';
 
 function ProjectEditor({ project, onBackToDashboard, userId }) {
     // Main State
@@ -42,7 +44,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false });
+    const [selectedDBs, setSelectedDBs] = useState({ pubmed: false, scopus: false, embase: false, core: true });
     const [searchFieldOptions, setSearchFieldOptions] = useState(Object.keys(DB_CONFIG).reduce((acc, key) => ({ ...acc, [key]: Object.keys(DB_CONFIG[key].searchFields)[0] }), {}));
     const [retmax, setRetmax] = useState(25);
     
@@ -247,6 +249,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
             } else {
             // ADVANCED LOGIC FOR ALL OTHER DATABASES
+            console.log(searchFieldOptions)
                 activeTerms = [
                     ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, searchFieldOptions[dbKey])),
                     ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, searchFieldOptions[dbKey]))
@@ -280,6 +283,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             let count = 'N/A';
             if (dbKey === 'pubmed') count = await getPubmedCount(query);
             else if (dbKey === 'scopus' || dbKey === 'embase') count = await getElsevierCount(dbKey, query);
+            else if (dbKey === 'core') count = await getCoreCount(query);
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
         } catch (err) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'Error', loading: false } }));
@@ -336,6 +340,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 let articles = [];
                 if (dbKey === 'pubmed') articles = await searchPubmed(currentQueries[dbKey], retmax);
                 else if (dbKey === 'scopus' || dbKey === 'embase') articles = await searchElsevier(dbKey, currentQueries[dbKey], retmax);
+                else if (dbKey === 'core') articles = await searchCore(currentQueries[dbKey], retmax);
     
                 console.log(`4. Found ${articles.length} articles from ${dbKey}.`);
                 results[dbKey] = { status: 'success', data: articles };
@@ -480,12 +485,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             {selectedArticle && <ArticleDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
             {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={allArticles} hasDeduplicated={!!deduplicationResult} irrelevantArticles={irrelevantArticles} onExport={exportHandler} />}
             
-            <header className="bg-white shadow-sm">
-                <div className="mx-auto max-w-7xl py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">PreVue | <span className="text-indigo-600">{project.name}</span></h1>
-                    <div className="flex items-center gap-x-4"><button onClick={onBackToDashboard} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><HomeIcon className="h-5 w-5 text-gray-400" />Dashboard</button></div>
-                </div>
-            </header>
+            <Header title="Prevue" subtitle={project.name} onBackButtonClicked={onBackToDashboard} backButtonText="Dashboard" />
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="rounded-lg border bg-white p-6 md:p-10 shadow-lg">

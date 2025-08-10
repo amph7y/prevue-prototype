@@ -40,6 +40,8 @@ function ArticleDetailModal({ article, onClose }) {
                     console.error("Failed to fetch full article details from PubMed:", error);
                     toast.error("Failed to load full PubMed abstract.");
                 }
+            }else if(article.sourceDB === 'core') {
+                url = article.downloadUrl;
             }
 
             setDetails({ abstract, doi, url });

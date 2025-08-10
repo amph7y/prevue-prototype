@@ -4,6 +4,8 @@ import { copyToClipboard } from '../../utils/clipboard.js';
 import { ArrowUturnLeftIcon, SearchIcon, ClipboardIcon, PlusCircleIcon, MinusCircleIcon, SparklesIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
 
+const ALLOWED_DBS = ['pubmed', 'scopus', 'core'];
+
 const QueryBuilder = ({ state, actions }) => {
     const { queries, searchCounts, isSearching, selectedDBs, negativeKeywords, searchFieldOptions, keywords } = state;
     const { setStep, handleRunSearch, setNegativeKeywords, handleDbSelectionChange, handleSearchFieldChange, setRefineModalData } = actions;
@@ -53,12 +55,27 @@ const QueryBuilder = ({ state, actions }) => {
                 <div className="p-4 border rounded-lg bg-gray-50">
                     <h3 className="text-lg font-semibold text-gray-800">Select Databases</h3>
                     <fieldset className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {Object.entries(DB_CONFIG).map(([key, { name }]) => (
-                            <div key={key} className="relative flex items-start">
-                                <div className="flex h-6 items-center"><input id={key} name={key} type="checkbox" checked={selectedDBs[key] || false} onChange={(e) => handleDbSelectionChange(key, e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" /></div>
-                                <div className="ml-3 text-sm"><label htmlFor={key} className="font-medium text-gray-900">{name}</label></div>
-                            </div>
-                        ))}
+                        {Object.entries(DB_CONFIG).map(([key, { name }]) => {
+                            const isAllowed = ALLOWED_DBS.includes(key);
+                            return (
+                                <div key={key} className="relative flex items-start">
+                                    <div className="flex h-6 items-center">
+                                        <input
+                                            id={key}
+                                            name={key}
+                                            type="checkbox"
+                                            checked={selectedDBs[key] || false}
+                                            onChange={(e) => isAllowed && handleDbSelectionChange(key, e.target.checked)}
+                                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                            disabled={!isAllowed}
+                                        />
+                                    </div>
+                                    <div className="ml-3 text-sm">
+                                        <label htmlFor={key} className={isAllowed ? "font-medium text-gray-900" : "font-medium text-gray-400"}>{name}</label>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </fieldset>
                 </div>
             </div>
