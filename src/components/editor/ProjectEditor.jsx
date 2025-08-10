@@ -249,7 +249,6 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
             } else {
             // ADVANCED LOGIC FOR ALL OTHER DATABASES
-            console.log(searchFieldOptions)
                 activeTerms = [
                     ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, searchFieldOptions[dbKey])),
                     ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, searchFieldOptions[dbKey]))
