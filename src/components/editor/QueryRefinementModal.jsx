@@ -7,6 +7,7 @@ import { getElsevierCount } from '../../api/elsevierApi.js';
 import { XCircleIcon, SparklesIcon, ArrowPathIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
 import { cn } from '../../utils/cn.js';
+import { getCoreCount } from '../../api/coreApi.js';
 
 const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
     const [editedQuery, setEditedQuery] = useState('');
@@ -62,6 +63,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
             let count = 'N/A';
             if (modalData.dbKey === 'pubmed') count = await getPubmedCount(editedQuery);
             else if (modalData.dbKey === 'scopus' || modalData.dbKey === 'embase') count = await getElsevierCount(modalData.dbKey, editedQuery);
+            else if (modalData.dbKey === 'core') count = await getCoreCount(editedQuery);
             setTempCount(count);
             toast.success("Count refreshed!");
         } catch (err) {
