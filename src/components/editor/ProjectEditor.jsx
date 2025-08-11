@@ -45,7 +45,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [selectedDBs, setSelectedDBs] = useState({ pubmed: false, scopus: false, embase: false, core: true });
+    const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false, core: true });
     const [searchFieldOptions, setSearchFieldOptions] = useState(Object.keys(DB_CONFIG).reduce((acc, key) => ({ ...acc, [key]: Object.keys(DB_CONFIG[key].searchFields)[0] }), {}));
     const [retmax, setRetmax] = useState(25);
     
@@ -273,6 +273,26 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         return finalQuery.trim();
     };
 
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function retryAsync(fn, { tries = 4, baseDelayMs = 800, factor = 3 } = {}) {
+        let attempt = 0;
+        let lastError;
+        while (attempt < tries) {
+            try {
+                return await fn();
+            } catch (err) {
+                lastError = err;
+                attempt += 1;
+                if (attempt >= tries) break;
+                const delay = baseDelayMs * Math.pow(factor, attempt - 1);
+                await sleep(delay);
+            }
+        }
+    };
+
     const fetchAndSetCount = async (dbKey) => {
         const query = generateSingleQuery(dbKey);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
@@ -282,14 +302,16 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             return;
         }
         try {
-            let count = 'N/A';
-            if (dbKey === 'pubmed') count = await getPubmedCount(query);
-            else if (dbKey === 'scopus' || dbKey === 'embase') count = await getElsevierCount(dbKey, query);
-            else if (dbKey === 'core') count = await getCoreCount(query);
+            const count = await retryAsync(async () => {
+                if (dbKey === 'pubmed') return await getPubmedCount(query);
+                if (dbKey === 'scopus' || dbKey === 'embase') return await getElsevierCount(dbKey, query);
+                if (dbKey === 'core') return await getCoreCount(query);
+                return 'N/A';
+            }, { tries: 4, baseDelayMs: 800, factor: 3 });
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
         } catch (err) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'Error', loading: false } }));
-            toast.error(`Failed to get count for ${dbKey}: ${err.message}`);
+            toast.error(`Failed to get count for ${dbKey} after retries: ${err.message}`);
         }
     };
     
@@ -307,11 +329,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
 
     useEffect(() => {
         if (step === 2) {
-            Object.keys(selectedDBs).forEach(dbKey => {
-                if (selectedDBs[dbKey]) {
-                    fetchAndSetCount(dbKey);
-                }
-            });
+            (async () => {
+                const keys = Object.keys(selectedDBs).filter(k => selectedDBs[k]);
+                await Promise.allSettled(keys.map(dbKey => fetchAndSetCount(dbKey)));
+            })();
         }
     }, [step]);
     
@@ -335,31 +356,39 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         setSearchResults(null);
         let results = {};
         let allFetchedArticles = [];
-    
-        for (const dbKey in currentQueries) {
+
+        const keys = Object.keys(currentQueries);
+        const tasks = keys.map(dbKey => (async () => {
             console.log(`3. Searching ${dbKey}...`);
+            const query = currentQueries[dbKey];
             try {
-                let articles = [];
-                if (dbKey === 'pubmed') articles = await searchPubmed(currentQueries[dbKey], retmax);
-                else if (dbKey === 'scopus' || dbKey === 'embase') articles = await searchElsevier(dbKey, currentQueries[dbKey], retmax);
-                else if (dbKey === 'core') articles = await searchCore(currentQueries[dbKey], retmax);
-    
+                const articles = await retryAsync(async () => {
+                    if (dbKey === 'pubmed') return await searchPubmed(query, retmax);
+                    if (dbKey === 'scopus' || dbKey === 'embase') return await searchElsevier(dbKey, query, retmax);
+                    if (dbKey === 'core') return await searchCore(query, retmax);
+                    return [];
+                }, { tries: 4, baseDelayMs: 800, factor: 3 });
                 console.log(`4. Found ${articles.length} articles from ${dbKey}.`);
                 results[dbKey] = { status: 'success', data: articles };
                 allFetchedArticles.push(...articles);
             } catch (err) {
                 console.error(`Error searching ${dbKey}:`, err);
                 results[dbKey] = { status: 'error', message: err.message };
-                toast.error(`Search failed for ${dbKey}: ${err.message}`);
+                toast.error(`Search failed for ${dbKey} after retries: ${err.message}`);
             }
-        }
+        })());
+
+        await Promise.all(tasks);
+
         console.log("5. All searches complete. Final results:", results);
         setSearchResults(results);
         setAllArticles(allFetchedArticles);
         setIsSearching(false);
     
         if (!isUpdate) {
-            console.log("6. Navigating to Step 4.");
+            const anyFailure = Object.values(results).some(r => r.status === 'error');
+            if (anyFailure) return; // stay on Query step
+            console.log("6. Navigating to Results.");
             setStep(3);
         }
     };
