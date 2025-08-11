@@ -3,6 +3,22 @@ import { ArrowRightIcon, MagnifyingGlassIcon, SparklesIcon, DocumentTextIcon, Ch
 import Header from '../../components/common/Header.jsx';
 
 function LandingPage({ onGetStarted }) {
+  const [contactForm, setContactForm] = React.useState({ name: '', email: '', message: '' });
+
+  const handleContactChange = (e) => {
+    const { name, value } = e.target;
+    setContactForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleContactSubmit = (e) => {
+    e.preventDefault();
+    const { name, email, message } = contactForm;
+    if (!name.trim() || !email.trim() || !message.trim()) return;
+    const subject = encodeURIComponent(`Prevue Contact - ${name}`);
+    const body = encodeURIComponent(`${message}\n\nFrom: ${name}\nEmail: ${email}`);
+    window.location.href = `mailto:mohammadalnoss@outlook.com?subject=${subject}&body=${body}`;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Navigation */}
@@ -136,8 +152,6 @@ function LandingPage({ onGetStarted }) {
         </div>
       </div>
 
-
-
       {/* CTA Section */}
       <div className="py-20 bg-gradient-to-r from-indigo-600 to-purple-600">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -154,6 +168,33 @@ function LandingPage({ onGetStarted }) {
             Start Your Free Trial
             <ArrowRightIcon className="ml-2 h-5 w-5" />
           </button>
+        </div>
+      </div>
+
+      {/* Contact Us */}
+      <div id="contact" className="py-20 bg-white">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4 text-center">Contact Us</h2>
+          <p className="text-gray-600 text-center mb-8">Have questions or feedback? Send us a message and we'll get back to you.</p>
+          <form onSubmit={handleContactSubmit} className="bg-gray-50 rounded-xl shadow p-6 space-y-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">Name</label>
+              <input id="name" name="name" value={contactForm.name} onChange={handleContactChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+              <input id="email" name="email" type="email" value={contactForm.email} onChange={handleContactChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+            </div>
+            <div>
+              <label htmlFor="message" className="block text-sm font-medium text-gray-700">Message</label>
+              <textarea id="message" name="message" rows={5} value={contactForm.message} onChange={handleContactChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+            </div>
+            <div className="flex justify-end">
+              <button type="submit" className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700">
+                Send Message
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
