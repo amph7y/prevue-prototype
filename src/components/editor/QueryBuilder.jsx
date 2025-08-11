@@ -25,7 +25,11 @@ const QueryBuilder = ({ state, actions }) => {
 
     const navButtons = (
         <div className="flex justify-between items-center">
-            <button type="button" onClick={() => setStep(2)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />Back to Keywords</button>
+            <button type="button" onClick={() => setStep(1)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                <ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />
+                Back to Define
+            </button>
+
             <button type="button" onClick={() => handleRunSearch()} disabled={isSearching} className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">
                 {isSearching ? <><Spinner /> <span className='ml-2'>Searching...</span></> : <><SearchIcon className="h-5 w-5 mr-2" /><span>Run Live Search</span></>}
             </button>
@@ -34,7 +38,6 @@ const QueryBuilder = ({ state, actions }) => {
 
     return (
         <div className="mt-10">
-            {navButtons}
             <h2 className="text-2xl font-bold mt-8">3. Build & Run Your Search</h2>
             <p className="mt-2 text-gray-600">Review the queries for each database. They update automatically when you change keywords or options.</p>
             

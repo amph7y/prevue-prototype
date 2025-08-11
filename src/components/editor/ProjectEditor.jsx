@@ -26,6 +26,7 @@ import ThesaurusModal from './ThesaurusModal.jsx';
 import QueryRefinementModal from './QueryRefinementModal.jsx';
 import { HomeIcon, CheckIcon } from '../common/Icons.jsx';
 import Header from '../common/Header.jsx';
+import DefineStep from './DefineStep.jsx';
 
 function ProjectEditor({ project, onBackToDashboard, userId }) {
     // Main State
@@ -129,13 +130,16 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         const prompt = `Analyze this research question: "${researchQuestion}". Extract the PICO components (Population, Intervention, Comparison, Outcome). For each component, provide a single, concise phrase. Return ONLY a JSON object with keys "p", "i", "c", "o", where each value is an array with one string. If a component is missing, return an empty array.`;
         try {
             const result = await callGeminiAPI(prompt);
-            setPico({
+            const generatedPico = {
                 p: result.p && result.p.length > 0 ? result.p : [''],
                 i: result.i && result.i.length > 0 ? result.i : [''],
                 c: result.c && result.c.length > 0 ? result.c : [''],
                 o: result.o && result.o.length > 0 ? result.o : [''],
-            });
-            toast.success("PICO generated from your question!");
+            };
+            setPico(generatedPico);
+            // Auto-generate keywords right after PICO generation
+            await handleGenerateKeywords(generatedPico);
+            toast.success("PICO and keywords generated from your question!");
         } catch (err) {
             toast.error(`Failed to generate PICO: ${err.message}`);
         } finally {
@@ -206,7 +210,6 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 };
             }
             setKeywords(formattedKeywords);
-            setStep(2);
             toast.success("Keywords generated successfully!");
         } catch (err) {
             toast.error(`Keyword generation failed: ${err.message}`);
@@ -292,7 +295,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
     const handleDbSelectionChange = (dbKey, isChecked) => {
         setSelectedDBs(prev => ({ ...prev, [dbKey]: isChecked }));
-        if (isChecked && step === 3) {
+        if (isChecked && step === 2) {
             fetchAndSetCount(dbKey);
         }
     };
@@ -303,7 +306,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     };
 
     useEffect(() => {
-        if (step === 3) {
+        if (step === 2) {
             Object.keys(selectedDBs).forEach(dbKey => {
                 if (selectedDBs[dbKey]) {
                     fetchAndSetCount(dbKey);
@@ -357,7 +360,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
         if (!isUpdate) {
             console.log("6. Navigating to Step 4.");
-            setStep(4);
+            setStep(3);
         }
     };
 
@@ -451,10 +454,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
 
     const renderStepIndicator = () => (
         <nav aria-label="Progress"><ol role="list" className="flex items-center">
-            {['Define', 'Keywords', 'Query', 'Results'].map((name, index) => {
+            {['Define', 'Query', 'Results'].map((name, index) => {
                 const s = index + 1;
                 const canNavigate = !!keywords;
-                return (<li key={name} className={cn("relative", index !== 3 ? "pr-8 sm:pr-20" : "")}>
+                return (<li key={name} className={cn("relative", index !== 2 ? "pr-8 sm:pr-20" : "")}> 
                     {step > s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-indigo-600" /></div><button disabled={!canNavigate} onClick={() => setStep(s)} className="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-900 disabled:bg-gray-400"><CheckIcon className="h-5 w-5 text-white" /></button></>) 
                     : step === s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-indigo-600 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /></span></>) 
                     : (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="group relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-300 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-transparent" /></span></>)}
@@ -489,10 +492,24 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="rounded-lg border bg-white p-6 md:p-10 shadow-lg">
                         <div className="mb-8">{renderStepIndicator()}</div>
-                        {step === 1 && <PicoBuilder state={{ researchQuestion, pico, isLoading }} actions={{ setResearchQuestion, setPico, handleGenerateKeywords, handleTestParameters, handleGeneratePicoFromQuestion, handleSuggestPicoTerms }} />}
-                        {step === 2 && <KeywordViewer state={{ keywords, pico }} actions={{ setKeywords, setStep, showMenu, findSynonyms, handleAddKeyword }} />}
-                        {step === 3 && <QueryBuilder state={{ queries, searchCounts, isSearching, selectedDBs, negativeKeywords, searchFieldOptions, keywords }} actions={{ setStep, handleRunSearch, setNegativeKeywords, handleDbSelectionChange, handleSearchFieldChange, setRefineModalData }} />}
-                        {step === 4 && <ResultsViewer state={{ searchResults, allArticles, deduplicationResult, irrelevantArticles, retmax, isSearching }} actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles, setDeduplicationResult, toggleIrrelevant, setRetmax, handleRunSearch, handleDeduplicate }} />}
+                        {step === 1 && (
+                            <DefineStep
+                                state={{ researchQuestion, pico, isLoading, keywords }}
+                                actions={{ setResearchQuestion, setPico, handleGenerateKeywords, handleGeneratePicoFromQuestion, setKeywords, setStep, showMenu, findSynonyms, handleAddKeyword, onBackToDashboard }}
+                            />
+                        )}
+                        {step === 2 && (
+                            <QueryBuilder
+                                state={{ queries, searchCounts, isSearching, selectedDBs, negativeKeywords, searchFieldOptions, keywords }}
+                                actions={{ setStep, handleRunSearch, setNegativeKeywords, handleDbSelectionChange, handleSearchFieldChange, setRefineModalData }}
+                            />
+                        )}
+                        {step === 3 && (
+                            <ResultsViewer
+                                state={{ searchResults, allArticles, deduplicationResult, irrelevantArticles, retmax, isSearching }}
+                                actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles, setDeduplicationResult, toggleIrrelevant, setRetmax, handleRunSearch, handleDeduplicate }}
+                            />
+                        )}
                     </div>
                 </div>
             </main>
