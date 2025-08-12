@@ -16,7 +16,7 @@ function LandingPage({ onGetStarted }) {
     if (!name.trim() || !email.trim() || !message.trim()) return;
     const subject = encodeURIComponent(`Prevue Contact - ${name}`);
     const body = encodeURIComponent(`${message}\n\nFrom: ${name}\nEmail: ${email}`);
-    window.location.href = `mailto:mohammadalnoss@outlook.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:prevue.ai@gmail.com?subject=${subject}&body=${body}`;
   };
 
   return (
