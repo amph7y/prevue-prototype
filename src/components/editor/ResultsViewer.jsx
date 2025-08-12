@@ -43,7 +43,7 @@ const ResultsViewer = ({ state, actions }) => {
 
     const navButtons = (
        <div className="flex justify-between items-center">
-            <button type="button" onClick={() => setStep(3)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />Back to Queries</button>
+            <button type="button" onClick={() => setStep(2)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />Back to Queries</button>
             <button onClick={() => setIsExportModalOpen(true)} className="inline-flex items-center gap-x-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700">
                 <DownloadIcon className="h-5 w-5" /> Export All
             </button>
@@ -52,7 +52,6 @@ const ResultsViewer = ({ state, actions }) => {
 
     return (
         <div className="space-y-6 mt-10">
-            {navButtons}
             <h2 className="text-2xl font-bold text-gray-800 pt-8">Step 4: Review & Export Results</h2>
 
             {isSearching && (

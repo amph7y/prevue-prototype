@@ -4,12 +4,14 @@ import { auth } from './config/firebase.js';
 import toast from 'react-hot-toast';
 import ProjectDashboard from './components/dashboard/ProjectDashboard.jsx';
 import ProjectEditor from './components/editor/ProjectEditor.jsx';
+import LandingPage from './components/landing/LandingPage.jsx';
 import Spinner from './components/common/Spinner.jsx';
 
 export default function App() {
   const [userId, setUserId] = React.useState(null);
   const [activeProject, setActiveProject] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [showLandingPage, setShowLandingPage] = React.useState(true);
 
   React.useEffect(() => {
     if (!auth) {
@@ -41,6 +43,18 @@ export default function App() {
     );
   }
 
+  const handleGetStarted = () => {
+    setShowLandingPage(false);
+  };
+
+  const handleBackToLanding = () => {
+    setShowLandingPage(true);
+  };
+
+  if (showLandingPage) {
+    return <LandingPage onGetStarted={handleGetStarted} />;
+  }
+
   return (
     <>
       {activeProject ? (
@@ -50,7 +64,7 @@ export default function App() {
           userId={userId}
         />
       ) : (
-        <ProjectDashboard onSelectProject={setActiveProject} userId={userId} />
+        <ProjectDashboard onSelectProject={setActiveProject} userId={userId} onBackToLanding={handleBackToLanding} />
       )}
     </>
   );
