@@ -12,6 +12,7 @@ import { cn } from '../../utils/cn.js';
 import { callGeminiAPI } from '../../api/geminiApi.js';
 import { getPubmedCount, searchPubmed } from '../../api/pubmedApi.js';
 import { getElsevierCount, searchElsevier } from '../../api/elsevierApi.js';
+import { getCoreCount, searchCore } from '../../api/coreApi.js';
 
 // Child Components & Modals
 import PicoBuilder from './PicoBuilder.jsx';
@@ -24,6 +25,8 @@ import PicoSuggestionsModal from './PicoSuggestionsModal.jsx';
 import ThesaurusModal from './ThesaurusModal.jsx';
 import QueryRefinementModal from './QueryRefinementModal.jsx';
 import { HomeIcon, CheckIcon } from '../common/Icons.jsx';
+import Header from '../common/Header.jsx';
+import DefineStep from './DefineStep.jsx';
 
 function ProjectEditor({ project, onBackToDashboard, userId }) {
     // Main State
@@ -42,7 +45,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false });
+    const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false, core: true });
     const [searchFieldOptions, setSearchFieldOptions] = useState(Object.keys(DB_CONFIG).reduce((acc, key) => ({ ...acc, [key]: Object.keys(DB_CONFIG[key].searchFields)[0] }), {}));
     const [retmax, setRetmax] = useState(25);
     
@@ -127,13 +130,16 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         const prompt = `Analyze this research question: "${researchQuestion}". Extract the PICO components (Population, Intervention, Comparison, Outcome). For each component, provide a single, concise phrase. Return ONLY a JSON object with keys "p", "i", "c", "o", where each value is an array with one string. If a component is missing, return an empty array.`;
         try {
             const result = await callGeminiAPI(prompt);
-            setPico({
+            const generatedPico = {
                 p: result.p && result.p.length > 0 ? result.p : [''],
                 i: result.i && result.i.length > 0 ? result.i : [''],
                 c: result.c && result.c.length > 0 ? result.c : [''],
                 o: result.o && result.o.length > 0 ? result.o : [''],
-            });
-            toast.success("PICO generated from your question!");
+            };
+            setPico(generatedPico);
+            // Auto-generate keywords right after PICO generation
+            await handleGenerateKeywords(generatedPico);
+            toast.success("PICO and keywords generated from your question!");
         } catch (err) {
             toast.error(`Failed to generate PICO: ${err.message}`);
         } finally {
@@ -204,7 +210,6 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 };
             }
             setKeywords(formattedKeywords);
-            setStep(2);
             toast.success("Keywords generated successfully!");
         } catch (err) {
             toast.error(`Keyword generation failed: ${err.message}`);
@@ -268,6 +273,26 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         return finalQuery.trim();
     };
 
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function retryAsync(fn, { tries = 4, baseDelayMs = 800, factor = 3 } = {}) {
+        let attempt = 0;
+        let lastError;
+        while (attempt < tries) {
+            try {
+                return await fn();
+            } catch (err) {
+                lastError = err;
+                attempt += 1;
+                if (attempt >= tries) break;
+                const delay = baseDelayMs * Math.pow(factor, attempt - 1);
+                await sleep(delay);
+            }
+        }
+    };
+
     const fetchAndSetCount = async (dbKey) => {
         const query = generateSingleQuery(dbKey);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
@@ -277,19 +302,22 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             return;
         }
         try {
-            let count = 'N/A';
-            if (dbKey === 'pubmed') count = await getPubmedCount(query);
-            else if (dbKey === 'scopus' || dbKey === 'embase') count = await getElsevierCount(dbKey, query);
+            const count = await retryAsync(async () => {
+                if (dbKey === 'pubmed') return await getPubmedCount(query);
+                if (dbKey === 'scopus' || dbKey === 'embase') return await getElsevierCount(dbKey, query);
+                if (dbKey === 'core') return await getCoreCount(query);
+                return 'N/A';
+            }, { tries: 4, baseDelayMs: 800, factor: 3 });
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
         } catch (err) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'Error', loading: false } }));
-            toast.error(`Failed to get count for ${dbKey}: ${err.message}`);
+            toast.error(`Failed to get count for ${dbKey} after retries: ${err.message}`);
         }
     };
     
     const handleDbSelectionChange = (dbKey, isChecked) => {
         setSelectedDBs(prev => ({ ...prev, [dbKey]: isChecked }));
-        if (isChecked && step === 3) {
+        if (isChecked && step === 2) {
             fetchAndSetCount(dbKey);
         }
     };
@@ -300,12 +328,11 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     };
 
     useEffect(() => {
-        if (step === 3) {
-            Object.keys(selectedDBs).forEach(dbKey => {
-                if (selectedDBs[dbKey]) {
-                    fetchAndSetCount(dbKey);
-                }
-            });
+        if (step === 2) {
+            (async () => {
+                const keys = Object.keys(selectedDBs).filter(k => selectedDBs[k]);
+                await Promise.allSettled(keys.map(dbKey => fetchAndSetCount(dbKey)));
+            })();
         }
     }, [step]);
     
@@ -329,31 +356,40 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         setSearchResults(null);
         let results = {};
         let allFetchedArticles = [];
-    
-        for (const dbKey in currentQueries) {
+
+        const keys = Object.keys(currentQueries);
+        const tasks = keys.map(dbKey => (async () => {
             console.log(`3. Searching ${dbKey}...`);
+            const query = currentQueries[dbKey];
             try {
-                let articles = [];
-                if (dbKey === 'pubmed') articles = await searchPubmed(currentQueries[dbKey], retmax);
-                else if (dbKey === 'scopus' || dbKey === 'embase') articles = await searchElsevier(dbKey, currentQueries[dbKey], retmax);
-    
+                const articles = await retryAsync(async () => {
+                    if (dbKey === 'pubmed') return await searchPubmed(query, retmax);
+                    if (dbKey === 'scopus' || dbKey === 'embase') return await searchElsevier(dbKey, query, retmax);
+                    if (dbKey === 'core') return await searchCore(query, retmax);
+                    return [];
+                }, { tries: 4, baseDelayMs: 800, factor: 3 });
                 console.log(`4. Found ${articles.length} articles from ${dbKey}.`);
                 results[dbKey] = { status: 'success', data: articles };
                 allFetchedArticles.push(...articles);
             } catch (err) {
                 console.error(`Error searching ${dbKey}:`, err);
                 results[dbKey] = { status: 'error', message: err.message };
-                toast.error(`Search failed for ${dbKey}: ${err.message}`);
+                toast.error(`Search failed for ${dbKey} after retries: ${err.message}`);
             }
-        }
+        })());
+
+        await Promise.all(tasks);
+
         console.log("5. All searches complete. Final results:", results);
         setSearchResults(results);
         setAllArticles(allFetchedArticles);
         setIsSearching(false);
     
         if (!isUpdate) {
-            console.log("6. Navigating to Step 4.");
-            setStep(4);
+            const anyFailure = Object.values(results).some(r => r.status === 'error');
+            if (anyFailure) return; // stay on Query step
+            console.log("6. Navigating to Results.");
+            setStep(3);
         }
     };
 
@@ -447,10 +483,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
 
     const renderStepIndicator = () => (
         <nav aria-label="Progress"><ol role="list" className="flex items-center">
-            {['Define', 'Keywords', 'Query', 'Results'].map((name, index) => {
+            {['Define', 'Query', 'Results'].map((name, index) => {
                 const s = index + 1;
                 const canNavigate = !!keywords;
-                return (<li key={name} className={cn("relative", index !== 3 ? "pr-8 sm:pr-20" : "")}>
+                return (<li key={name} className={cn("relative", index !== 2 ? "pr-8 sm:pr-20" : "")}> 
                     {step > s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-indigo-600" /></div><button disabled={!canNavigate} onClick={() => setStep(s)} className="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-900 disabled:bg-gray-400"><CheckIcon className="h-5 w-5 text-white" /></button></>) 
                     : step === s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-indigo-600 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /></span></>) 
                     : (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="group relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-300 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-transparent" /></span></>)}
@@ -480,20 +516,29 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             {selectedArticle && <ArticleDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
             {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={allArticles} hasDeduplicated={!!deduplicationResult} irrelevantArticles={irrelevantArticles} onExport={exportHandler} />}
             
-            <header className="bg-white shadow-sm">
-                <div className="mx-auto max-w-7xl py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">PreVue | <span className="text-indigo-600">{project.name}</span></h1>
-                    <div className="flex items-center gap-x-4"><button onClick={onBackToDashboard} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><HomeIcon className="h-5 w-5 text-gray-400" />Dashboard</button></div>
-                </div>
-            </header>
+            <Header title="Prevue" subtitle={project.name} onBackButtonClicked={onBackToDashboard} backButtonText="Dashboard" />
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="rounded-lg border bg-white p-6 md:p-10 shadow-lg">
                         <div className="mb-8">{renderStepIndicator()}</div>
-                        {step === 1 && <PicoBuilder state={{ researchQuestion, pico, isLoading }} actions={{ setResearchQuestion, setPico, handleGenerateKeywords, handleTestParameters, handleGeneratePicoFromQuestion, handleSuggestPicoTerms }} />}
-                        {step === 2 && <KeywordViewer state={{ keywords, pico }} actions={{ setKeywords, setStep, showMenu, findSynonyms, handleAddKeyword }} />}
-                        {step === 3 && <QueryBuilder state={{ queries, searchCounts, isSearching, selectedDBs, negativeKeywords, searchFieldOptions, keywords }} actions={{ setStep, handleRunSearch, setNegativeKeywords, handleDbSelectionChange, handleSearchFieldChange, setRefineModalData }} />}
-                        {step === 4 && <ResultsViewer state={{ searchResults, allArticles, deduplicationResult, irrelevantArticles, retmax, isSearching }} actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles, setDeduplicationResult, toggleIrrelevant, setRetmax, handleRunSearch, handleDeduplicate }} />}
+                        {step === 1 && (
+                            <DefineStep
+                                state={{ researchQuestion, pico, isLoading, keywords }}
+                                actions={{ setResearchQuestion, setPico, handleGenerateKeywords, handleGeneratePicoFromQuestion, setKeywords, setStep, showMenu, findSynonyms, handleAddKeyword, onBackToDashboard }}
+                            />
+                        )}
+                        {step === 2 && (
+                            <QueryBuilder
+                                state={{ queries, searchCounts, isSearching, selectedDBs, negativeKeywords, searchFieldOptions, keywords }}
+                                actions={{ setStep, handleRunSearch, setNegativeKeywords, handleDbSelectionChange, handleSearchFieldChange, setRefineModalData }}
+                            />
+                        )}
+                        {step === 3 && (
+                            <ResultsViewer
+                                state={{ searchResults, allArticles, deduplicationResult, irrelevantArticles, retmax, isSearching }}
+                                actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles, setDeduplicationResult, toggleIrrelevant, setRetmax, handleRunSearch, handleDeduplicate }}
+                            />
+                        )}
                     </div>
                 </div>
             </main>
