@@ -6,6 +6,8 @@ import ProjectDashboard from './components/dashboard/ProjectDashboard.jsx';
 import ProjectEditor from './components/editor/ProjectEditor.jsx';
 import LandingPage from './components/landing/LandingPage.jsx';
 import Spinner from './components/common/Spinner.jsx';
+import { GlobalDownloadProvider } from './contexts/GlobalDownloadContext.jsx';
+import DownloadCenter from './components/common/DownloadCenter.jsx';
 
 export default function App() {
   const [userId, setUserId] = React.useState(null);
@@ -52,11 +54,17 @@ export default function App() {
   };
 
   if (showLandingPage) {
-    return <LandingPage onGetStarted={handleGetStarted} />;
+    return (
+      <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
+        <LandingPage onGetStarted={handleGetStarted} />
+        <DownloadCenter />
+      </GlobalDownloadProvider>
+
+    );
   }
 
   return (
-    <>
+    <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
       {activeProject ? (
         <ProjectEditor
           project={activeProject}
@@ -66,6 +74,7 @@ export default function App() {
       ) : (
         <ProjectDashboard onSelectProject={setActiveProject} userId={userId} onBackToLanding={handleBackToLanding} />
       )}
-    </>
+      <DownloadCenter />
+    </GlobalDownloadProvider>
   );
 }

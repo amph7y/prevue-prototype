@@ -22,7 +22,7 @@ function LandingPage({ onGetStarted }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Navigation */}
-      <Header title="Prevue" showNav={true} />
+      <Header title="Prevue" showNav={true} showDownloadButton={false} />
 
       {/* Hero Section */}
       <div className="relative overflow-hidden">
