@@ -8,7 +8,7 @@ async function fetchCoreData(query, offset = 0, limit = 25) {
   const url = `${CORE_API_URL}/works?apiKey=${CORE_API_KEY}`;
   const payload = {
     q: query,
-    exclude: ['fullText'],
+    exclude: ['fullText', 'links', 'outputs', ''],
     limit: limit,
     offset: offset,
     entity_type: "works"
@@ -29,9 +29,9 @@ export async function getCoreCount(query) {
   return data.totalHits || 0;
 }
 
-export async function searchCore(query, limit = 25) {
-  const data = await fetchCoreData(query, 0, limit);
-  return (data.results || []).map(item => ({
+export async function searchCore(query, limit = 25, offset = 0) {
+  const data = await fetchCoreData(query, offset, limit);
+  return {total: data.totalHits, data: (data.results || []).map(item => ({
     title: item.title,
     authors: item.authors || [],
     year: item.yearPublished,
@@ -41,5 +41,5 @@ export async function searchCore(query, limit = 25) {
     abstract: item.abstract,
     sourceDB: 'core',
     uniqueId: `core_${item.id}`
-  }));
+  }))};
 }
