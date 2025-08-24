@@ -1,25 +1,31 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { DB_CONFIG } from '../../config/dbConfig.js';
+import { EXPORT_CAPS } from '../../config/exportConfig.js';
 import { XCircleIcon } from './Icons.jsx';
 import { cn } from '../../utils/cn.js';
 
-function ExportModal({ onClose, onExport, allArticles, hasDeduplicated, irrelevantArticles }) {
+function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
     const availableDBs = [...new Set(allArticles.map(a => a.sourceDB))];
     const [selectedExportDBs, setSelectedExportDBs] = useState(() =>
         availableDBs.reduce((acc, key) => ({ ...acc, [key]: true }), {})
     );
     const [includeDuplicates, setIncludeDuplicates] = useState(false);
-    const [excludeIrrelevant, setExcludeIrrelevant] = useState(true);
+    const [exportFullDataset, setExportFullDataset] = useState(false);
 
-    const handleExport = (format) => {
+    const handleExport = async (format) => {
         const options = {
             selectedDBs: Object.keys(selectedExportDBs).filter(key => selectedExportDBs[key]),
             includeDuplicates,
-            excludeIrrelevant
+            exportFullDataset
         };
-        onExport(format, options);
-        onClose();
+        
+        try {
+            await onExport(format, options);
+            onClose();
+        } catch (error) {
+            console.error('Export failed:', error);
+        }
     };
 
     return (
@@ -48,6 +54,9 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated, irreleva
                                         </div>
                                         <div className="ml-3 text-sm leading-6">
                                             <label htmlFor={`export-${dbKey}`} className="font-medium text-gray-900">{DB_CONFIG[dbKey]?.name || dbKey}</label>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                📊 Cap: {EXPORT_CAPS[dbKey]?.toLocaleString() || 'No limit'} records
+                                            </p>
                                         </div>
                                     </div>
                                 ))}
@@ -58,31 +67,50 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated, irreleva
                         <h4 className="text-md font-semibold text-gray-800">Content Filters</h4>
                         <div className="relative flex items-start mt-2">
                             <div className="flex h-6 items-center">
-                                <input id="include-duplicates" type="checkbox" checked={includeDuplicates} onChange={(e) => setIncludeDuplicates(e.target.checked)} disabled={!hasDeduplicated} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:opacity-50" />
+                                <input id="exclude-duplicates" type="checkbox" checked={includeDuplicates} onChange={(e) => setIncludeDuplicates(e.target.checked)} disabled className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:bg-gray-100 disabled:text-gray-400" />
                             </div>
                             <div className="ml-3 text-sm leading-6">
-                                <label htmlFor="include-duplicates" className={cn("font-medium text-gray-900", !hasDeduplicated && "text-gray-400")}>
-                                    Include duplicates
+                                <label htmlFor="exclude-duplicates" className="font-medium text-gray-400">
+                                    Exclude duplicates (disabled)
                                 </label>
-                                {!hasDeduplicated && <p className="text-xs text-gray-400">Run deduplication first to enable this.</p>}
                             </div>
                         </div>
+
                         <div className="relative flex items-start mt-2">
                             <div className="flex h-6 items-center">
-                                <input id="exclude-irrelevant" type="checkbox" checked={excludeIrrelevant} onChange={(e) => setExcludeIrrelevant(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
+                                <input id="export-full-dataset" type="checkbox" checked={exportFullDataset} onChange={(e) => setExportFullDataset(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
                             </div>
                             <div className="ml-3 text-sm leading-6">
-                                <label htmlFor="exclude-irrelevant" className="font-medium text-gray-900">
-                                    Exclude articles marked as irrelevant ({irrelevantArticles.size})
+                                <label htmlFor="export-full-dataset" className="font-medium text-gray-900">
+                                    Export full dataset (all available records)
                                 </label>
+                                <p className="text-xs text-orange-600 mt-1 font-medium">
+                                    📋 Note: Export caps apply (PubMed: 500, Scopus/Embase: 250, Core: 5,000 records)
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
+                
                 <div className="p-6 bg-gray-50 rounded-b-lg border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <button onClick={() => handleExport('ris')} className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700">RIS</button>
-                    <button onClick={() => handleExport('csv')} className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50">CSV</button>
-                    <button onClick={() => handleExport('printable')} className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50">Printable</button>
+                    <button 
+                        onClick={() => handleExport('ris')} 
+                        className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700"
+                    >
+                        RIS
+                    </button>
+                    <button 
+                        onClick={() => handleExport('csv')} 
+                        className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                    >
+                        CSV
+                    </button>
+                    <button 
+                        onClick={() => handleExport('printable')} 
+                        className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                    >
+                        Printable
+                    </button>
                 </div>
             </div>
         </div>
@@ -94,7 +122,6 @@ ExportModal.propTypes = {
     onExport: PropTypes.func.isRequired,
     allArticles: PropTypes.arrayOf(PropTypes.object).isRequired,
     hasDeduplicated: PropTypes.bool.isRequired,
-    irrelevantArticles: PropTypes.instanceOf(Set).isRequired,
 };
 
 export default ExportModal;
