@@ -2,13 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@import './styles/brand.css';
+
 /* Spinner Animation */
 .spinner {
   border: 2px solid rgba(0, 0, 0, 0.1);
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  border-left-color: #4f46e5; /* indigo-600 */
+  border-left-color: #39d0c4; /* main brand color */
   animation: spin 1s linear infinite;
 }
 

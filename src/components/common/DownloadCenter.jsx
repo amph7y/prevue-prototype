@@ -131,21 +131,34 @@ function DownloadCenter() {
                                                     )}
                                                 </div>
                                                 
-                                                {download.status === 'processing' && download.progress > 0 && (
+                                                {download.status === 'processing' && (
                                                     <div className="mt-3">
+                                                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                                                            <span>Progress</span>
+                                                            <span>{Math.round(download.progress || 0)}%</span>
+                                                        </div>
                                                         <div className="w-full bg-gray-200 rounded-full h-2">
                                                             <div 
-                                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                                                                style={{ width: `${download.progress}%` }}
+                                                                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out" 
+                                                                style={{ width: `${download.progress || 0}%` }}
                                                             ></div>
                                                         </div>
-                                                        <p className="text-xs text-gray-500 mt-1">{Math.round(download.progress)}% complete</p>
+                                                        <div className="flex items-center mt-2 text-xs text-gray-500">
+                                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                                                            <span>Downloading articles...</span>
+                                                        </div>
+                                                        {download.processedRecords > 0 && (
+                                                            <p className="text-xs text-blue-600 mt-1 font-medium">
+                                                                {download.processedRecords.toLocaleString()} articles downloaded so far
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
                                             
                                             <div className="flex items-center space-x-2 ml-4">
-                                                {(download.status === 'completed' || download.status === 'partial') && (
+                                                {/* Show download button for completed, partial, or failed downloads with partial data */}
+                                                {(download.status === 'completed' || download.status === 'partial' || (download.status === 'failed' && download.articleCount > 0)) && (
                                                     <button
                                                         onClick={() => downloadFile(download.id)}
                                                         className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -154,7 +167,8 @@ function DownloadCenter() {
                                                         Download
                                                     </button>
                                                 )}
-                                                {download.status === 'failed' && retryDownload && (
+                                                {/* Show retry button for failed downloads or partial downloads */}
+                                                {(download.status === 'failed' || download.status === 'partial') && retryDownload && (
                                                     <button
                                                         onClick={() => retryDownload(download.id)}
                                                         className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"

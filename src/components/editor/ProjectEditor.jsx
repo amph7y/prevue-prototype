@@ -236,7 +236,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         handleGenerateKeywords(testPico);
     };
     
-    const generateSingleQuery = (dbKey) => {
+    const generateSingleQuery = (dbKey, fieldOverride) => {
         if (!keywords) return '';
         const { syntax } = DB_CONFIG[dbKey];
         const picoToKeywordMap = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
@@ -255,15 +255,15 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
                 const keywordTerms = keywordCategory.keywords
                     .filter(k => k.active)
-                    .map(k => syntax.phrase(k.term, searchFieldOptions[dbKey]));
+                    .map(k => syntax.phrase(k.term, fieldOverride || searchFieldOptions[dbKey]));
     
                 activeTerms = [...meshTerms, ...keywordTerms];
     
             } else {
             // ADVANCED LOGIC FOR ALL OTHER DATABASES
                 activeTerms = [
-                    ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, searchFieldOptions[dbKey])),
-                    ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, searchFieldOptions[dbKey]))
+                    ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, fieldOverride || searchFieldOptions[dbKey])),
+                    ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, fieldOverride || searchFieldOptions[dbKey]))
                 ];
             }
     
@@ -282,8 +282,8 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         return finalQuery.trim();
     };
 
-    const fetchAndSetCount = async (dbKey) => {
-        const query = generateSingleQuery(dbKey);
+    const fetchAndSetCount = async (dbKey, fieldOverride) => {
+        const query = generateSingleQuery(dbKey, fieldOverride);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
         setSearchCounts(prev => ({ ...prev, [dbKey]: { ...prev[dbKey], loading: true } }));
         if (!query) {
@@ -312,8 +312,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     };
     
     const handleSearchFieldChange = (dbKey, newField) => {
-        setSearchFieldOptions(prev => ({...prev, [dbKey]: newField }));
-        setTimeout(() => fetchAndSetCount(dbKey), 0);
+
+        setSearchFieldOptions({...searchFieldOptions, [dbKey]: newField });
+
+        setTimeout(() => fetchAndSetCount(dbKey, newField), 100);
     };
 
     useEffect(() => {
