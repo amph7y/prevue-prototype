@@ -99,9 +99,9 @@ export async function searchPubmed(query, retmax = 25, retstart = 0, fetchDetail
         } else {
             const summaryParams = { db: 'pubmed', id: idList.join(','), retmode: 'json' };
             const summaryData = await fetchPubmed('esummary.fcgi', summaryParams);
-            return Object.values(summaryData.result)
+            return {total: searchData.esearchresult?.count, data: Object.values(summaryData.result)
                 .filter(item => item.uid)
-                .map(item => ({ ...item, sourceDB: 'pubmed', uniqueId: `pubmed_${item.uid}` }));
+                .map(item => ({ ...item, sourceDB: 'pubmed', uniqueId: `pubmed_${item.uid}` }))};
         }
     } catch (error) {
         console.error("Error searching PubMed:", error);

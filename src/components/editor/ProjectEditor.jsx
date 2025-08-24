@@ -21,14 +21,21 @@ import QueryBuilder from './QueryBuilder.jsx';
 import ResultsViewer from './ResultsViewer.jsx';
 import ArticleDetailModal from '../common/ArticleDetailModal.jsx';
 import ExportModal from '../common/ExportModal.jsx';
+
 import PicoSuggestionsModal from './PicoSuggestionsModal.jsx';
 import ThesaurusModal from './ThesaurusModal.jsx';
 import QueryRefinementModal from './QueryRefinementModal.jsx';
-import { HomeIcon, CheckIcon } from '../common/Icons.jsx';
+import { HomeIcon, CheckIcon, DownloadIcon } from '../common/Icons.jsx';
 import Header from '../common/Header.jsx';
 import DefineStep from './DefineStep.jsx';
+import { retryAsync } from '../../utils/utils.js';
+import { useGlobalDownload } from '../../contexts/GlobalDownloadContext.jsx';
+import { generateExportFile, downloadBlob, generateExportFilename } from '../../utils/exportUtils.js';
 
 function ProjectEditor({ project, onBackToDashboard, userId }) {
+    // Global Download Context
+    const { addDownload, setIsOpen: setDownloadCenterOpen } = useGlobalDownload();
+    
     // Main State
     const [step, setStep] = useState(project.initialStep || 1);
     const [pico, setPico] = useState({ p: [''], i: [''], c: [''], o: [''] });
@@ -37,14 +44,16 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [negativeKeywords, setNegativeKeywords] = useState(['']);
     const [queries, setQueries] = useState({});
     const [searchCounts, setSearchCounts] = useState({});
+    const [searchTotals, setSearchTotals] = useState({}); // Store totals from actual search results
     const [searchResults, setSearchResults] = useState(null);
-    const [allArticles, setAllArticles] = useState([]);
+    const [initialArticles, setInitialArticles] = useState([]);
     const [deduplicationResult, setDeduplicationResult] = useState(null);
     const [irrelevantArticles, setIrrelevantArticles] = useState(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
     const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false, core: true });
     const [searchFieldOptions, setSearchFieldOptions] = useState(Object.keys(DB_CONFIG).reduce((acc, key) => ({ ...acc, [key]: Object.keys(DB_CONFIG[key].searchFields)[0] }), {}));
     const [retmax, setRetmax] = useState(25);
@@ -227,7 +236,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         handleGenerateKeywords(testPico);
     };
     
-    const generateSingleQuery = (dbKey) => {
+    const generateSingleQuery = (dbKey, fieldOverride) => {
         if (!keywords) return '';
         const { syntax } = DB_CONFIG[dbKey];
         const picoToKeywordMap = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
@@ -246,15 +255,15 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
                 const keywordTerms = keywordCategory.keywords
                     .filter(k => k.active)
-                    .map(k => syntax.phrase(k.term, searchFieldOptions[dbKey]));
+                    .map(k => syntax.phrase(k.term, fieldOverride || searchFieldOptions[dbKey]));
     
                 activeTerms = [...meshTerms, ...keywordTerms];
     
             } else {
             // ADVANCED LOGIC FOR ALL OTHER DATABASES
                 activeTerms = [
-                    ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, searchFieldOptions[dbKey])),
-                    ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, searchFieldOptions[dbKey]))
+                    ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, fieldOverride || searchFieldOptions[dbKey])),
+                    ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, fieldOverride || searchFieldOptions[dbKey]))
                 ];
             }
     
@@ -273,28 +282,8 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         return finalQuery.trim();
     };
 
-    function sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    async function retryAsync(fn, { tries = 4, baseDelayMs = 800, factor = 3 } = {}) {
-        let attempt = 0;
-        let lastError;
-        while (attempt < tries) {
-            try {
-                return await fn();
-            } catch (err) {
-                lastError = err;
-                attempt += 1;
-                if (attempt >= tries) break;
-                const delay = baseDelayMs * Math.pow(factor, attempt - 1);
-                await sleep(delay);
-            }
-        }
-    };
-
-    const fetchAndSetCount = async (dbKey) => {
-        const query = generateSingleQuery(dbKey);
+    const fetchAndSetCount = async (dbKey, fieldOverride) => {
+        const query = generateSingleQuery(dbKey, fieldOverride);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
         setSearchCounts(prev => ({ ...prev, [dbKey]: { ...prev[dbKey], loading: true } }));
         if (!query) {
@@ -307,7 +296,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 if (dbKey === 'scopus' || dbKey === 'embase') return await getElsevierCount(dbKey, query);
                 if (dbKey === 'core') return await getCoreCount(query);
                 return 'N/A';
-            }, { tries: 4, baseDelayMs: 800, factor: 3 });
+            });
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
         } catch (err) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'Error', loading: false } }));
@@ -323,8 +312,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     };
     
     const handleSearchFieldChange = (dbKey, newField) => {
-        setSearchFieldOptions(prev => ({...prev, [dbKey]: newField }));
-        setTimeout(() => fetchAndSetCount(dbKey), 0);
+
+        setSearchFieldOptions({...searchFieldOptions, [dbKey]: newField });
+
+        setTimeout(() => fetchAndSetCount(dbKey, newField), 100);
     };
 
     useEffect(() => {
@@ -352,28 +343,36 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         });
         console.log("2. Queries generated:", currentQueries);
         setQueries(currentQueries);
-        setAllArticles([]);
+        setInitialArticles([]);
         setSearchResults(null);
         let results = {};
         let allFetchedArticles = [];
-
+    
         const keys = Object.keys(currentQueries);
+        const totals = {};
         const tasks = keys.map(dbKey => (async () => {
             console.log(`3. Searching ${dbKey}...`);
             const query = currentQueries[dbKey];
             try {
-                const articles = await retryAsync(async () => {
+                const response = await retryAsync(async () => {
                     if (dbKey === 'pubmed') return await searchPubmed(query, retmax);
                     if (dbKey === 'scopus' || dbKey === 'embase') return await searchElsevier(dbKey, query, retmax);
                     if (dbKey === 'core') return await searchCore(query, retmax);
-                    return [];
-                }, { tries: 4, baseDelayMs: 800, factor: 3 });
-                console.log(`4. Found ${articles.length} articles from ${dbKey}.`);
+                    return { total: 0, data: [] };
+                });
+                
+                // Extract articles and total from response
+                const articles = response.data || response; // Fallback for old format
+                const total = response.total || 0;
+                
+                console.log(`4. Found ${articles.length} articles from ${dbKey} (${total} total available).`);
                 results[dbKey] = { status: 'success', data: articles };
+                totals[dbKey] = total;
                 allFetchedArticles.push(...articles);
             } catch (err) {
                 console.error(`Error searching ${dbKey}:`, err);
                 results[dbKey] = { status: 'error', message: err.message };
+                totals[dbKey] = 0;
                 toast.error(`Search failed for ${dbKey} after retries: ${err.message}`);
             }
         })());
@@ -381,23 +380,50 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         await Promise.all(tasks);
 
         console.log("5. All searches complete. Final results:", results);
+        console.log("6. Search totals:", totals);
         setSearchResults(results);
-        setAllArticles(allFetchedArticles);
+        setInitialArticles(allFetchedArticles);
+        setSearchTotals(totals); // Store the totals from search results
         setIsSearching(false);
     
         if (!isUpdate) {
             const anyFailure = Object.values(results).some(r => r.status === 'error');
             if (anyFailure) return; // stay on Query step
-            console.log("6. Navigating to Results.");
+            console.log("7. Navigating to Results.");
             setStep(3);
         }
     };
 
+    const handlePaginatedSearch = async (dbKey, page, pageSize = 25) => {
+        console.log(`Paginated search for ${dbKey}, page ${page}, pageSize: ${pageSize}`);
+        const query = queries[dbKey];
+        if (!query) return [];
+
+        try {
+            const offset = (page - 1) * pageSize;
+            const response = await retryAsync(async () => {
+                if (dbKey === 'pubmed') return await searchPubmed(query, pageSize, offset);
+                if (dbKey === 'scopus' || dbKey === 'embase') return await searchElsevier(dbKey, query, pageSize, offset);
+                if (dbKey === 'core') return await searchCore(query, pageSize, offset);
+                return { total: 0, data: [] };
+            }, { tries: 5, baseDelayMs: 1000, factor: 3 });
+            
+            // Extract articles from response (handle both old and new format)
+            const articles = response.data || response;
+            console.log(`Found ${articles.length} articles from ${dbKey} page ${page}`);
+            return articles;
+        } catch (err) {
+            console.error(`Error searching ${dbKey} page ${page}:`, err);
+            toast.error(`Failed to load page ${page} for ${dbKey}: ${err.message}`);
+            return [];
+        }
+    };
+
     const handleDeduplicate = () => {
-        if (allArticles.length === 0) return toast.error("No articles to deduplicate.");
+        if (initialArticles.length === 0) return toast.error("No articles to deduplicate.");
         const seen = new Set();
         let duplicateCount = 0;
-        const updatedArticles = allArticles.map(article => {
+        const updatedArticles = initialArticles.map(article => {
             const doi = article.doi || article.externalIds?.DOI;
             const title = (article.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             let isDuplicate = (doi && seen.has(doi)) || (title && seen.has(title));
@@ -410,7 +436,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 return { ...article, isDuplicate: false };
             }
         });
-        setAllArticles(updatedArticles);
+        setInitialArticles(updatedArticles);
         setDeduplicationResult({ count: duplicateCount });
         toast.success(`${duplicateCount} duplicates found.`);
     };
@@ -425,60 +451,70 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         setIrrelevantArticles(newSet);
     };
 
-    const exportHandler = (format, options) => {
-        let itemsToExport = [...allArticles];
-        if (options.excludeIrrelevant) {
-            itemsToExport = itemsToExport.filter(item => !irrelevantArticles.has(item.uniqueId));
+    const exportHandler = async (format, options) => {
+        console.log('Export handler called with:', format, options);
+        
+        // Check if user wants full dataset export
+        if (options.exportFullDataset) {
+            console.log('Starting global background export...');
+            
+            // Use global download context
+            const downloadName = generateExportFilename(project.name, format);
+            addDownload({
+                name: downloadName,
+                format,
+                options,
+                queries,
+                searchTotals,
+                progress: 0,
+                totalRecords: 0,
+                processedRecords: 0
+            });
+            
+            // Open download center automatically
+            setDownloadCenterOpen(true);
+            
+            toast.success('Export started! Check download center for progress.');
+            return; // Exit early, user will get file from download center
         }
-        if (!options.includeDuplicates && deduplicationResult) {
+        
+        // Handle immediate export for visible articles
+        let itemsToExport = [...initialArticles];
+        
+        // Filter by selected databases
+        if (options.selectedDBs && options.selectedDBs.length > 0) {
+            itemsToExport = itemsToExport.filter(item => options.selectedDBs.includes(item.sourceDB));
+        }
+        
+        if (options.includeDuplicates && deduplicationResult) {
             itemsToExport = itemsToExport.filter(item => !item.isDuplicate);
         }
+        
+        console.log(`Exporting ${itemsToExport.length} articles from ${initialArticles.length} total`);
         if (itemsToExport.length === 0) return toast.error('No articles to export with selected options.');
         
-        if (format === 'csv') {
-            const headers = ['Title', 'Authors', 'Year', 'Journal/Venue', 'DOI', 'Abstract', 'Source'];
-            const escapeCsvCell = (cell) => `"${(cell || '').replace(/"/g, '""')}"`;
-            const rows = itemsToExport.map(item => [
-                escapeCsvCell(item.title),
-                escapeCsvCell(item.authors?.map(a => a.name).join('; ')),
-                escapeCsvCell(item.year || item.pubdate),
-                escapeCsvCell(item.venue || item.source),
-                escapeCsvCell(item.doi || item.externalIds?.DOI),
-                escapeCsvCell(item.abstract),
-                escapeCsvCell(item.sourceDB)
-            ].join(','));
-            const csvContent = [headers.join(','), ...rows].join('\n');
-            const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${project.name}_export.csv`;
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } else if (format === 'ris') {
-            const risContent = itemsToExport.map(item => {
-                let ris = `TY  - JOUR\n`;
-                if(item.title) ris += `TI  - ${item.title}\n`;
-                item.authors?.forEach(author => { ris += `AU  - ${author.name}\n`; });
-                if(item.year || item.pubdate) ris += `PY  - ${item.year || item.pubdate}\n`;
-                if(item.venue || item.source) ris += `JO  - ${item.venue || item.source}\n`;
-                const doi = item.doi || item.externalIds?.DOI;
-                if(doi) ris += `DO  - ${doi}\n`;
-                if(item.abstract) ris += `AB  - ${item.abstract}\n`;
-                ris += `ER  - \n`;
-                return ris;
-            }).join('');
-            const blob = new Blob([risContent], { type: 'application/x-research-info-systems' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a'); link.href = url; link.download = `${project.name}_export.ris`;
-            link.click();
-            URL.revokeObjectURL(link.href);
-        } else if (format === 'printable') {
-            const reportWindow = window.open('', '_blank');
-            reportWindow.document.write(`<html><head><title>Printable Report - ${project.name}</title><style>body{font-family:sans-serif;line-height:1.5;padding:20px}article{border-bottom:1px solid #eee;padding-bottom:1rem;margin-bottom:1rem}h3{font-size:1.2rem;margin-bottom:0.5rem}p{margin:0.25rem 0}.meta{font-size:0.9rem;color:#555}</style></head><body><h1>Results for: ${project.name}</h1>${itemsToExport.map((item, index) => `<article><h3>${index + 1}. ${item.title || 'No Title'}</h3><p class="meta"><strong>Authors:</strong> ${item.authors?.map(a => a.name).join(', ')}</p><p class="meta"><strong>Journal/Venue:</strong> ${item.venue || item.source || 'N/A'} (${item.year || item.pubdate || 'N/A'})</p><p class="meta"><strong>DOI:</strong> ${item.doi || item.externalIds?.DOI || 'N/A'}</p><p><strong>Abstract:</strong> ${item.abstract || 'No abstract available.'}</p></article>`).join('')}</body></html>`);
-            reportWindow.document.close();
-            reportWindow.focus();
+        try {
+            // Use centralized export utilities
+            const blob = generateExportFile(format, itemsToExport, { title: project.name });
+            const filename = generateExportFilename(project.name, format);
+            
+            if (format === 'printable') {
+                // For printable format, open in new window instead of downloading
+                const url = URL.createObjectURL(blob);
+                const reportWindow = window.open(url, '_blank');
+                reportWindow.focus();
+                // Clean up URL after a delay to allow the page to load
+                setTimeout(() => URL.revokeObjectURL(url), 5000);
+            } else {
+                // Download the file
+                downloadBlob(blob, filename);
+            }
+            
+            toast.success(`Exported ${itemsToExport.length} articles.`);
+        } catch (error) {
+            console.error('Export error:', error);
+            toast.error(`Failed to export ${format.toUpperCase()} file: ${error.message}`);
         }
-        toast.success(`Exported ${itemsToExport.length} articles.`);
     };
 
     const renderStepIndicator = () => (
@@ -514,9 +550,18 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 onApplyChanges={setKeywords}
             />
             {selectedArticle && <ArticleDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
-            {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={allArticles} hasDeduplicated={!!deduplicationResult} irrelevantArticles={irrelevantArticles} onExport={exportHandler} />}
+            {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={initialArticles} hasDeduplicated={!!deduplicationResult} onExport={exportHandler} />}
+
             
-            <Header title="Prevue" subtitle={project.name} onBackButtonClicked={onBackToDashboard} backButtonText="Dashboard" />
+            <Header 
+                title="Prevue" 
+                subtitle={project.name} 
+                onBackButtonClicked={onBackToDashboard} 
+                backButtonText="Dashboard"
+                showDownloadButton={true}
+            />
+            
+
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="rounded-lg border bg-white p-6 md:p-10 shadow-lg">
@@ -535,8 +580,8 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                         )}
                         {step === 3 && (
                             <ResultsViewer
-                                state={{ searchResults, allArticles, deduplicationResult, irrelevantArticles, retmax, isSearching }}
-                                actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles, setDeduplicationResult, toggleIrrelevant, setRetmax, handleRunSearch, handleDeduplicate }}
+                                state={{ searchResults, initialArticles, deduplicationResult, pageSize: retmax, isSearching, searchTotals }}
+                                actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles: setInitialArticles, setDeduplicationResult, setPageSize: setRetmax, handleRunSearch, handleDeduplicate, handlePaginatedSearch }}
                             />
                         )}
                     </div>

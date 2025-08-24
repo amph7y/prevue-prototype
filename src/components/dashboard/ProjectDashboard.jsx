@@ -119,11 +119,13 @@ function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
                                     </div>
                                     <button onClick={() => setShowGapSection(false)} className="text-sm text-gray-500 hover:text-gray-700">Hide</button>
                                 </div>
+                                {/* Temporarily hidden: Are you interested section
                                 <div className="mt-4 flex flex-wrap gap-3 items-center">
                                     <span className="text-sm text-gray-700">Are you interested?</span>
                                     <button onClick={() => handleGapInterest(true)} className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-indigo-100 px-3 py-1.5 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-200">Yes</button>
                                     <button onClick={() => handleGapInterest(false)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Not right now</button>
                                 </div>
+                                */}
                             </div>
                         ) : (
                             <div className="bg-white p-4 rounded-lg shadow-sm flex items-center justify-between">

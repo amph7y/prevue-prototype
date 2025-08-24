@@ -1,0 +1,35 @@
+/* PreVue Brand Styles */
+
+/* Additional brand-specific utilities not covered by Tailwind */
+.hero-bg {
+  background-color: #f5f5f5;
+  background-image: radial-gradient(hsla(0, 0%, 0%, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.gradient-text {
+  background: linear-gradient(to right, #39d0c4, #2aa79b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.angled-top-white {
+  clip-path: polygon(0 0, 100% 50px, 100% 100%, 0 100%);
+}
+
+.angled-bottom-fill {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 50px), 0 100%);
+}
+
+.feature-card:hover .feature-icon {
+  transform: scale(1.1);
+  color: #39d0c4;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+}
+
+/* Ensure Inter font loads properly */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');

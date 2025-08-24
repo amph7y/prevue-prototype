@@ -1,71 +1,104 @@
 import React from 'react';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { auth } from './config/firebase.js';
-import toast from 'react-hot-toast';
 import ProjectDashboard from './components/dashboard/ProjectDashboard.jsx';
 import ProjectEditor from './components/editor/ProjectEditor.jsx';
 import LandingPage from './components/landing/LandingPage.jsx';
+import LoginPage from './components/auth/LoginPage.jsx';
 import Spinner from './components/common/Spinner.jsx';
+import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
+import { GlobalDownloadProvider } from './contexts/GlobalDownloadContext.jsx';
+import DownloadCenter from './components/common/DownloadCenter.jsx';
 
-export default function App() {
-  const [userId, setUserId] = React.useState(null);
+function AppContent() {
+  const { user, loading, isAuthenticated, userId } = useAuth();
   const [activeProject, setActiveProject] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [showLandingPage, setShowLandingPage] = React.useState(true);
+  const [currentView, setCurrentView] = React.useState('landing'); // 'landing', 'login', 'dashboard'
 
   React.useEffect(() => {
-    if (!auth) {
-        setLoading(false);
-        return;
-    }
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserId(user.uid);
-      } else {
-        try {
-          await signInAnonymously(auth);
-        } catch (error) {
-          console.error("Authentication failed", error);
-          toast.error(`Authentication failed: ${error.message}`);
+    if (!loading) {
+      if (isAuthenticated) {
+        if (currentView === 'login') {
+          setCurrentView('dashboard');
         }
+      } else {
+        setActiveProject(null);
       }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    }
+  }, [isAuthenticated, loading, currentView]);
 
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
         <Spinner />
-        <span className="ml-2">Authenticating...</span>
+        <span className="ml-2">Loading...</span>
       </div>
     );
   }
 
   const handleGetStarted = () => {
-    setShowLandingPage(false);
+    if (isAuthenticated) {
+      // User is already signed in, go directly to dashboard
+      setCurrentView('dashboard');
+    } else {
+      // User needs to sign in
+      setCurrentView('login');
+    }
   };
 
   const handleBackToLanding = () => {
-    setShowLandingPage(true);
+    setCurrentView('landing');
   };
 
-  if (showLandingPage) {
-    return <LandingPage onGetStarted={handleGetStarted} />;
+  const handleLoginSuccess = () => {
+    setCurrentView('dashboard');
+  };
+
+  if (currentView === 'landing') {
+    return (
+      <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
+        <LandingPage onGetStarted={handleGetStarted} />
+        <DownloadCenter />
+      </GlobalDownloadProvider>
+    );
+  }
+
+  if (currentView === 'login' && !isAuthenticated) {
+    return <LoginPage onSuccess={handleLoginSuccess} />;
+  }
+
+
+  if (currentView === 'dashboard' && isAuthenticated) {
+    return (
+      <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
+        {activeProject ? (
+          <ProjectEditor
+            project={activeProject}
+            onBackToDashboard={() => setActiveProject(null)}
+            userId={userId}
+          />
+        ) : (
+          <ProjectDashboard 
+            onSelectProject={setActiveProject} 
+            userId={userId} 
+            onBackToLanding={handleBackToLanding} 
+          />
+        )}
+        <DownloadCenter />
+      </GlobalDownloadProvider>
+    );
   }
 
   return (
-    <>
-      {activeProject ? (
-        <ProjectEditor
-          project={activeProject}
-          onBackToDashboard={() => setActiveProject(null)}
-          userId={userId}
-        />
-      ) : (
-        <ProjectDashboard onSelectProject={setActiveProject} userId={userId} onBackToLanding={handleBackToLanding} />
-      )}
-    </>
+    <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
+      <LandingPage onGetStarted={handleGetStarted} />
+      <DownloadCenter />
+    </GlobalDownloadProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
