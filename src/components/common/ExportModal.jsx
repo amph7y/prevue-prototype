@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { DB_CONFIG } from '../../config/dbConfig.js';
+import { EXPORT_CAPS } from '../../config/exportConfig.js';
 import { XCircleIcon } from './Icons.jsx';
 import { cn } from '../../utils/cn.js';
 
@@ -53,6 +54,9 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
                                         </div>
                                         <div className="ml-3 text-sm leading-6">
                                             <label htmlFor={`export-${dbKey}`} className="font-medium text-gray-900">{DB_CONFIG[dbKey]?.name || dbKey}</label>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                📊 Cap: {EXPORT_CAPS[dbKey]?.toLocaleString() || 'No limit'} records
+                                            </p>
                                         </div>
                                     </div>
                                 ))}
@@ -80,9 +84,8 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
                                 <label htmlFor="export-full-dataset" className="font-medium text-gray-900">
                                     Export full dataset (all available records)
                                 </label>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    ⚠️ This may take a long time and export tens of thousands of records. 
-                                    Use with caution for very large datasets.
+                                <p className="text-xs text-orange-600 mt-1 font-medium">
+                                    📋 Note: Export caps apply (PubMed: 500, Scopus/Embase: 250, Core: 5,000 records)
                                 </p>
                             </div>
                         </div>

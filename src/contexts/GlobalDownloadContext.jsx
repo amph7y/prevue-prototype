@@ -4,6 +4,7 @@ import { retryAsync } from '../utils/utils.js';
 import { searchPubmed } from '../api/pubmedApi.js';
 import { searchElsevier } from '../api/elsevierApi.js';
 import { searchCore } from '../api/coreApi.js';
+import { EXPORT_CAPS } from '../config/exportConfig.js';
 
 // IndexedDB utils for persistent file storage
 const DB_NAME = 'prevue-downloads';
@@ -263,8 +264,8 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
 
     const retryDownload = useCallback((downloadId) => {
         const download = downloads.find(d => d.id === downloadId);
-        if (!download || download.status !== 'failed') {
-            console.warn('Cannot retry: download not found or not in failed state');
+        if (!download || (download.status !== 'failed' && download.status !== 'partial')) {
+            console.warn('Cannot retry: download not found or not in failed or partial state');
             return;
         }
         
@@ -291,32 +292,34 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             
             updateDownload(download.id, { status: 'processing', progress: 5 });
 
-            // Get total records count
             const databasesToExport = options.selectedDBs && options.selectedDBs.length > 0 
                 ? options.selectedDBs 
                 : Object.keys(queries).filter(dbKey => queries[dbKey]);
-            
+                        
             let totalRecords = 0;
+            let cappedTotalRecords = 0;
             for (const dbKey of databasesToExport) {
-                totalRecords += Number(searchTotals?.[dbKey] || 0);
+                const dbTotal = Number(searchTotals?.[dbKey] || 0);
+                totalRecords += dbTotal;
+                cappedTotalRecords += Math.min(dbTotal, EXPORT_CAPS[dbKey] || dbTotal);
             }
             
-            updateDownload(download.id, { totalRecords, progress: 10 });
+            updateDownload(download.id, { 
+                totalRecords: cappedTotalRecords, 
+                originalTotalRecords: totalRecords,
+                progress: 10 
+            });
 
-            // Process articles in background
             const allArticles = await fetchAllArticles(download, totalRecords);
             
-            // Generate file
             const fileBlob = await generateExportFile(format, allArticles, options);
             
-            // Check if we got ALL expected records
-            const expectedTotal = totalRecords;
+            const expectedTotal = download.totalRecords || totalRecords;
             const actualTotal = allArticles.length;
             const isComplete = actualTotal >= expectedTotal;
             
-            // Update status to completed
             console.log('Completing download with file blob:', fileBlob);
-            console.log(`Downloaded ${actualTotal} of ${expectedTotal} expected records`);
+            console.log(`Downloaded ${actualTotal} of ${expectedTotal} expected records (capped)`);
             
             updateDownload(download.id, { 
                 status: isComplete ? 'completed' : 'partial', 
@@ -325,11 +328,17 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                 completedTime: Date.now(),
                 articleCount: allArticles.length,
                 expectedCount: expectedTotal,
+                originalExpectedCount: download.originalTotalRecords,
                 isComplete: isComplete
             });
             
             if (isComplete) {
-                toast.success(`Export completed! All ${allArticles.length} articles downloaded successfully.`);
+                const originalTotal = download.originalTotalRecords || expectedTotal;
+                if (originalTotal > expectedTotal) {
+                    toast.success(`Export completed! ${allArticles.length} articles downloaded (capped at ${expectedTotal} due to temporary limits). Original total: ${originalTotal} articles.`);
+                } else {
+                    toast.success(`Export completed! All ${allArticles.length} articles downloaded successfully.`);
+                }
             } else {
                 toast.success(`Export completed with ${allArticles.length} articles (${expectedTotal} expected). Some records may be unavailable.`);
             }
@@ -354,7 +363,7 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
     const fetchAllArticles = async (download, totalRecords) => {
         const { queries, searchTotals, options } = download;
         const allArticles = [];
-        
+
         // Per-database batch sizes (optimized for each API's rate limits)
         const getBatchSize = (dbKey) => {
             switch (dbKey) {
@@ -362,10 +371,10 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                 case 'embase':
                     return 25; // Scopus has very strict rate limits
                 case 'pubmed':
-                    return 100; 
+                    return 50; 
                 case 'core':
                 default:
-                    return 2500; // Default batch size
+                    return 1500; // Default batch size
             }
         };
         
@@ -373,26 +382,30 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             ? options.selectedDBs 
             : Object.keys(queries).filter(dbKey => queries[dbKey]);
         
-        let processedRecords = 0;
-        
-        for (const dbKey of databasesToExport) {
+        // Create all database tasks upfront
+        const databaseTasks = databasesToExport.map(async (dbKey) => {
             const query = queries[dbKey];
-            if (!query) continue;
+            if (!query) return [];
             
             const totalCount = searchTotals?.[dbKey] || 0;
-            if (totalCount === 0) continue;
+            if (totalCount === 0) return [];
             
+            const exportCap = EXPORT_CAPS[dbKey] || totalCount;
+            const cappedCount = Math.min(totalCount, exportCap);
             const batchSize = getBatchSize(dbKey);
-            console.log(`Processing ${dbKey} with batch size: ${batchSize} (total: ${totalCount} records)`);
             
-            // Process in batches with progress updates
-            for (let offset = 0; offset < totalCount; offset += batchSize) {
-                const currentBatchSize = Math.min(batchSize, totalCount - offset);
+            console.log(`Starting parallel fetch for ${dbKey}: ${cappedCount} records in batches of ${batchSize}`);
+            
+            const dbArticles = [];
+            let dbProcessedRecords = 0;
+            
+            // Process batches for this database
+            for (let offset = 0; offset < cappedCount; offset += batchSize) {
+                const currentBatchSize = Math.min(batchSize, cappedCount - offset);
                 
                 try {
-                    // Wrap API call in retry logic (3 attempts with exponential backoff)
                     const response = await retryAsync(async () => {
-                        console.log(`Fetching ${dbKey} batch: offset ${offset}, size ${currentBatchSize} (attempt)`);
+                        console.log(`Fetching ${dbKey} batch: offset ${offset}, size ${currentBatchSize}`);
                         
                         if (dbKey === 'pubmed') {
                             return await searchPubmed(query, currentBatchSize, offset);
@@ -405,7 +418,7 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     }, { 
                         tries: 3, 
                         baseDelayMs: 1000, 
-                        factor: 2 
+                        factor: 3
                     });
                     
                     const articles = response.data || response;
@@ -416,38 +429,52 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                             uniqueId: `${dbKey}_${article.uid || article.id || Math.random().toString(36).substr(2, 9)}`
                         }));
                         
-                        allArticles.push(...processedArticles);
-                        processedRecords += articles.length;
+                        dbArticles.push(...processedArticles);
+                        dbProcessedRecords += articles.length;
                         
-                        // Update progress
-                        const progress = Math.min(90, 10 + (processedRecords / totalRecords) * 80);
-                        updateDownload(download.id, { processedRecords, progress });
                         
-                        console.log(`Successfully fetched ${articles.length} articles from ${dbKey} (offset ${offset})`);
+                        console.log(`✅ ${dbKey}: ${articles.length} articles (${dbProcessedRecords}/${cappedCount})`);
                     }
                     
+                    // Rate limiting delay per database
                     await new Promise(resolve => setTimeout(resolve, 2500));
                     
                 } catch (error) {
-                    console.error(`Failed to fetch batch from ${dbKey} at offset ${offset} after 3 attempts:`, error);
-                    console.log(`Download failed - batch failed after retries. Downloaded ${allArticles.length} articles before failure.`);
-                    
-                    // Update download status to failed with error details
-                    updateDownload(download.id, { 
-                        status: 'failed',
-                        error: `Failed to fetch ${dbKey} batch at record ${offset} after 3 attempts: ${error.message}`,
-                        articleCount: allArticles.length,
-                        failedAt: {
-                            database: dbKey,
-                            offset: offset,
-                            timestamp: Date.now()
-                        }
-                    });
-                    
-                    // Stop processing and don't return articles (download failed)
-                    throw error;
+                    console.error(`❌ ${dbKey} failed at offset ${offset}:`, error.message);
+                    break;
                 }
             }
+            
+            console.log(`🏁 ${dbKey} completed: ${dbArticles.length} articles`);
+            return dbArticles;
+        });
+        
+        updateDownload(download.id, { progress: 20 }); // Show we're starting
+        
+        const results = await Promise.allSettled(databaseTasks);
+        
+        let totalProcessed = 0;
+        const failedDatabases = [];
+        
+        results.forEach((result, index) => {
+            const dbKey = databasesToExport[index];
+            if (result.status === 'fulfilled' && result.value.length > 0) {
+                allArticles.push(...result.value);
+                totalProcessed += result.value.length;
+                console.log(`✅ ${dbKey}: Successfully processed ${result.value.length} articles`);
+            } else {
+                failedDatabases.push(dbKey);
+                console.log(`❌ ${dbKey}: Failed or no articles`);
+            }
+        });
+        
+        updateDownload(download.id, { 
+            processedRecords: totalProcessed, 
+            progress: 90 
+        });
+        
+        if (failedDatabases.length > 0) {
+            console.log(`⚠️ Some databases failed: ${failedDatabases.join(', ')}. Continuing with ${allArticles.length} articles.`);
         }
         
         return allArticles;
