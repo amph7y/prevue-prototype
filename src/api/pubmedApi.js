@@ -1,15 +1,15 @@
-// Use the local PROXY path, not the direct URL
-const EUTILS_BASE_URL = "/pubmed-api/entrez/eutils/";
-const EUTILS_API_KEY = import.meta.env.VITE_PUBMED_API_KEY;
+
+const SEARCH_PUBMED_URL = 'https://searchpubmed-mq6lqjahiq-uc.a.run.app';
 
 async function fetchPubmed(endpoint, params, retmode = 'json') {
-    const url = `${EUTILS_BASE_URL}${endpoint}?api_key=${EUTILS_API_KEY}`;
-
     try {
-        const response = await fetch(url, {
+        const response = await fetch(`${SEARCH_PUBMED_URL}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({...params, 'api_key': EUTILS_API_KEY}),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                endpoint,
+                params
+            })
         });
 
         if (!response.ok) {
