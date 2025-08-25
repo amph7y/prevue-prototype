@@ -1,15 +1,23 @@
-const ELSEVIER_API_KEY = import.meta.env.VITE_ELSEVIER_API_KEY;
+
+const SEARCH_ELSEVIER_URL = 'https://searchelsevier-mq6lqjahiq-uc.a.run.app';
 
 async function fetchElsevierData(dbKey, query, retmax = 25, start = 0) {
-    if (!ELSEVIER_API_KEY) throw new Error("Elsevier API Key is required.");
     if (!query) return { 'search-results': { 'opensearch:totalResults': 0, entry: [] } };
     
-    const url = `https://api.elsevier.com/content/search/${dbKey}?query=${encodeURIComponent(query)}&count=${retmax}&start=${start}&httpAccept=application/json`;
-    const response = await fetch(url, { headers: { 'X-ELS-APIKey': ELSEVIER_API_KEY } });
+    const response = await fetch(`${SEARCH_ELSEVIER_URL}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            dbKey,
+            query,
+            limit: retmax,
+            offset: start
+        })
+    });
 
     if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(`API Error (${response.status}): ${errorBody['service-error']?.status?.statusText || `Unknown ${dbKey} Error`}`);
+        throw new Error(`API Error (${response.status}): ${errorBody.error || `Unknown ${dbKey} Error`}`);
     }
 
     return await response.json();

@@ -1,26 +1,24 @@
-const CORE_API_URL = 'https://api.core.ac.uk/v3/search';
-const CORE_API_KEY = import.meta.env.VITE_CORE_API_KEY;
+
+const SEARCH_CORE_URL = 'https://searchcore-mq6lqjahiq-uc.a.run.app';
 
 async function fetchCoreData(query, offset = 0, limit = 25) {
-  if (!CORE_API_KEY) throw new Error('CORE API Key is required.');
   if (!query) return { totalHits: 0, data: [] };
 
-  const url = `${CORE_API_URL}/works?apiKey=${CORE_API_KEY}`;
-  const payload = {
-    q: query,
-    exclude: ['fullText', 'links', 'outputs', ''],
-    limit: limit,
-    offset: offset,
-    entity_type: "works"
-  };
-  const response = await fetch(url, {
+  const response = await fetch(`${SEARCH_CORE_URL}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      query,
+      limit,
+      offset,
+      exclude: ['fullText', 'links', 'outputs']
+    })
   });
+  
   if (!response.ok) {
-    throw new Error(`CORE API error: ${response.status} ${response.statusText}`);
+    throw new Error(`Core API error: ${response.status} ${response.statusText}`);
   }
+  
   return await response.json();
 }
 
