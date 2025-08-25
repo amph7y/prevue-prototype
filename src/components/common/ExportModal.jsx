@@ -85,7 +85,7 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
                                     Export full dataset (all available records)
                                 </label>
                                 <p className="text-xs text-orange-600 mt-1 font-medium">
-                                    📋 Note: Export caps apply (PubMed: 500, Scopus/Embase: 250, Core: 5,000 records)
+                                    📋 Note: Export caps apply (PubMed: 500, Scopus/Embase: 250, Core: 2500 records)
                                 </p>
                             </div>
                         </div>

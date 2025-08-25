@@ -374,7 +374,7 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     return 50; 
                 case 'core':
                 default:
-                    return 1500; // Default batch size
+                    return 500; // Default batch size
             }
         };
         
