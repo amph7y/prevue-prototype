@@ -1,9 +1,7 @@
 
-const SEARCH_PUBMED_URL = 'https://searchpubmed-mq6lqjahiq-uc.a.run.app';
-
 async function fetchPubmed(endpoint, params, retmode = 'json') {
     try {
-        const response = await fetch(`${SEARCH_PUBMED_URL}`, {
+        const response = await fetch(`${import.meta.env.VITE_PUBMED_FB_URL}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
