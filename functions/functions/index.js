@@ -34,13 +34,9 @@ setGlobalOptions({ maxInstances: 10 });
 //   response.send("Hello from Firebase!");
 // });
 
-ELSEVIER_API_KEY="f5a540d49e1e963ac02842649e16d0ad"
-
-CORE_API_KEY="wcCDB4VhpHMeSqWFUov7fxulbgLastO1"
-
-PUBMED_API_KEY="7aff2bbbacd835c155196f6f0ad3b56cc309"
-
-exports.searchCore = functions.https.onRequest((req, res) => {
+exports.searchCore = functions.https.onRequest({
+    secrets: ["CORE_API_KEY"]
+  }, (req, res) => {
   return cors(req, res, async () => {
     try {
       const { query, limit = 25, offset = 0, exclude = ['fullText', 'links', 'outputs'] } = req.body;
@@ -53,7 +49,7 @@ exports.searchCore = functions.https.onRequest((req, res) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CORE_API_KEY}`
+          'Authorization': `Bearer ${process.env.CORE_API_KEY}`
         },
         body: JSON.stringify({
           q: query,
@@ -77,7 +73,9 @@ exports.searchCore = functions.https.onRequest((req, res) => {
   });
 });
 
-exports.searchPubMed = functions.https.onRequest((req, res) => {
+exports.searchPubMed = functions.https.onRequest({
+    secrets: ["PUBMED_API_KEY"]
+  }, (req, res) => {
   return cors(req, res, async () => {
     try {
       const { endpoint, params } = req.body;
@@ -86,12 +84,12 @@ exports.searchPubMed = functions.https.onRequest((req, res) => {
         return res.status(400).json({ error: 'Endpoint and params are required' });
       }
 
-      const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/${endpoint}?api_key=${PUBMED_API_KEY}`;
+      const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/${endpoint}?api_key=${process.env.PUBMED_API_KEY}`;
       
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({...params, 'api_key': PUBMED_API_KEY})
+        body: new URLSearchParams({...params, 'api_key': process.env.PUBMED_API_KEY})
       });
 
       if (!response.ok) {
@@ -107,7 +105,9 @@ exports.searchPubMed = functions.https.onRequest((req, res) => {
   });
 });
 
-exports.searchElsevier = functions.https.onRequest((req, res) => {
+exports.searchElsevier = functions.https.onRequest({
+    secrets: ["ELSEVIER_API_KEY"]
+  }, (req, res) => {
   return cors(req, res, async () => {
     try {
       const { dbKey, query, limit = 25, offset = 0 } = req.body;
@@ -116,7 +116,7 @@ exports.searchElsevier = functions.https.onRequest((req, res) => {
         return res.status(400).json({ error: 'Database key and query are required' });
       }
 
-      const url = `https://api.elsevier.com/content/search/${dbKey}?apiKey=${ELSEVIER_API_KEY}&query=${encodeURIComponent(query)}&count=${limit}&start=${offset}`;
+      const url = `https://api.elsevier.com/content/search/${dbKey}?apiKey=${process.env.ELSEVIER_API_KEY}&query=${encodeURIComponent(query)}&count=${limit}&start=${offset}`;
       
       const response = await fetch(url, {
         headers: { 'Accept': 'application/json' }
