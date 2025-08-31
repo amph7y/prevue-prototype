@@ -642,11 +642,11 @@ Return ONLY the JSON object with no additional text.`;
 
             
             <Header 
-                title="Prevue" 
                 subtitle={project.name} 
                 onBackButtonClicked={onBackToDashboard} 
                 backButtonText="Dashboard"
                 showDownloadButton={true}
+                onLogoClick={onBackToDashboard}
             />
             
 

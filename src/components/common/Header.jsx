@@ -3,7 +3,7 @@ import { DownloadIcon } from './Icons.jsx';
 import { useGlobalDownload } from '../../contexts/GlobalDownloadContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
-function Header({ title = "Prevue", subtitle = null, showNav = false, onBackButtonClicked, backButtonText = null, showDownloadButton = false }) {
+function Header({ title = "Prevue", subtitle = null, showNav = false, onBackButtonClicked, backButtonText = null, showDownloadButton = false, onLogoClick = null, actionButton = null }) {
   const { downloads, setIsOpen } = useGlobalDownload();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -29,11 +29,31 @@ function Header({ title = "Prevue", subtitle = null, showNav = false, onBackButt
         <div className="flex items-center h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <h1 className="text-2xl font-bold text-indigo-600">
+              {onLogoClick ? (
+                <button
+                  onClick={onLogoClick}
+                  className="flex items-center hover:opacity-80 transition-opacity duration-200"
+                >
+                  <img
+                    src="/PreVue Logo.png"
+                    alt="PreVue"
+                    className="h-10 w-auto"
+                  />
+                </button>
+              ) : (
+                <img
+                  src="/PreVue Logo.png"
+                  alt="PreVue"
+                  className="h-10 w-auto"
+                />
+              )}
+            </div>
+            <div className="ml-3">
+              <h1 className="text-2xl font-bold text-gray-900">
                 {subtitle ? (
                   <>
                     {title}
-                    <span className="text-gray-900"> | {subtitle}</span>
+                    <span className="text-gray-600 font-medium"> | {subtitle}</span>
                   </>
                 ) : (
                   title
@@ -52,6 +72,13 @@ function Header({ title = "Prevue", subtitle = null, showNav = false, onBackButt
           <div className="flex-1"></div>
           
           <div className="flex items-center space-x-4">
+            {/* Action Button */}
+            {actionButton && (
+              <div className="flex items-center">
+                {actionButton}
+              </div>
+            )}
+            
             <div className="flex items-center space-x-4">
             {/* Download Center Button */}
             {showDownloadButton && downloads && downloads.length > 0 && (
