@@ -16,7 +16,6 @@ import { getCoreCount, searchCore } from '../../api/coreApi.js';
 
 // Child Components & Modals
 import PicoBuilder from './PicoBuilder.jsx';
-import KeywordViewer from './KeywordViewer.jsx';
 import QueryBuilder from './QueryBuilder.jsx';
 import ResultsViewer from './ResultsViewer.jsx';
 import ArticleDetailModal from '../common/ArticleDetailModal.jsx';
@@ -38,10 +37,11 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     
     // Main State
     const [step, setStep] = useState(project.initialStep || 1);
-    const [pico, setPico] = useState({ p: [''], i: [''], c: [''], o: [''] });
+    const [concepts, setConcepts] = useState([]);
+    
     const [researchQuestion, setResearchQuestion] = useState('');
-    const [keywords, setKeywords] = useState(null);
     const [negativeKeywords, setNegativeKeywords] = useState(['']);
+    const [keywordStyle, setKeywordStyle] = useState('balanced');
     const [queries, setQueries] = useState({});
     const [searchCounts, setSearchCounts] = useState({});
     const [searchTotals, setSearchTotals] = useState({}); // Store totals from actual search results
@@ -55,7 +55,6 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false, core: true });
-    const [searchFieldOptions, setSearchFieldOptions] = useState(Object.keys(DB_CONFIG).reduce((acc, key) => ({ ...acc, [key]: Object.keys(DB_CONFIG[key].searchFields)[0] }), {}));
     const [retmax, setRetmax] = useState(25);
     
     // State for Modals
@@ -66,22 +65,23 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const { showMenu, ContextMenuComponent } = useContextMenu();
     const debounceTimeout = useRef(null);
 
+    const keywordGenerationStyles = {
+        focused: { value: 'focused', label: 'Focused', description: 'Fewer, more specific terms', aiPrompt: 'For "keywords", provide a JSON array of 3-4 focused, specific synonym strings.' },
+        balanced: { value: 'balanced', label: 'Balanced', description: 'Moderate number of terms', aiPrompt: 'For "keywords", provide a JSON array of 5-7 synonym strings.' },
+        comprehensive: { value: 'comprehensive', label: 'Comprehensive', description: 'Many terms for broad coverage', aiPrompt: 'For "keywords", provide a JSON array of 8-12 comprehensive synonym strings for broad coverage.' },
+    };
+
     useEffect(() => {
         const docRef = doc(db, `users/${userId}/projects/${project.id}`);
         getDoc(docRef).then(docSnap => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setResearchQuestion(data.researchQuestion || '');
-                const loadedPico = data.pico || {};
-                const safePico = {
-                    p: Array.isArray(loadedPico.p) && loadedPico.p.length > 0 ? loadedPico.p.map(String) : [''],
-                    i: Array.isArray(loadedPico.i) && loadedPico.i.length > 0 ? loadedPico.i.map(String) : [''],
-                    c: Array.isArray(loadedPico.c) && loadedPico.c.length > 0 ? loadedPico.c.map(String) : [''],
-                    o: Array.isArray(loadedPico.o) && loadedPico.o.length > 0 ? loadedPico.o.map(String) : [''],
-                };
-                setPico(safePico);
-                setKeywords(data.keywords || null);
+
+                let loadedConcepts = data.concepts || [];
+                setConcepts(loadedConcepts);
                 setNegativeKeywords(data.negativeKeywords || ['']);
+                setKeywordStyle(data.keywordStyle || 'balanced');
             }
         });
     }, [project.id, userId]);
@@ -90,25 +90,14 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
         debounceTimeout.current = setTimeout(() => {
             const docRef = doc(db, `users/${userId}/projects/${project.id}`);
-            setDoc(docRef, { researchQuestion, pico, keywords, negativeKeywords, lastSaved: serverTimestamp() }, { merge: true });
-        }, 2000);
+            const dataToSave = { researchQuestion, concepts, negativeKeywords, keywordStyle, lastSaved: serverTimestamp() };
+            console.log('Saving project data to database:', dataToSave);
+            setDoc(docRef, dataToSave, { merge: true });
+        }, 1000);
         return () => clearTimeout(debounceTimeout.current);
-    }, [researchQuestion, pico, keywords, negativeKeywords, project.id, userId]);
+    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, project.id, userId]);
 
-    const handleAddKeyword = (newTerm, category, type, source) => {
-        if (!newTerm || !keywords || !category || !type) return;
-        setKeywords(prev => {
-            const updatedKeywords = JSON.parse(JSON.stringify(prev));
-            const targetArray = updatedKeywords[category][type];
-            if (targetArray.some(item => item.term.toLowerCase() === newTerm.toLowerCase())) {
-                toast.error(`'${newTerm}' already exists.`);
-                return prev;
-            }
-            targetArray.push({ term: newTerm, active: true, source });
-            toast.success(`Added '${newTerm}'`);
-            return updatedKeywords;
-        });
-    };
+
 
     const findSynonyms = async (word, context) => {
         if (!word) return toast.error("Please provide a word to search.");
@@ -139,16 +128,26 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         const prompt = `Analyze this research question: "${researchQuestion}". Extract the PICO components (Population, Intervention, Comparison, Outcome). For each component, provide a single, concise phrase. Return ONLY a JSON object with keys "p", "i", "c", "o", where each value is an array with one string. If a component is missing, return an empty array.`;
         try {
             const result = await callGeminiAPI(prompt);
-            const generatedPico = {
-                p: result.p && result.p.length > 0 ? result.p : [''],
-                i: result.i && result.i.length > 0 ? result.i : [''],
-                c: result.c && result.c.length > 0 ? result.c : [''],
-                o: result.o && result.o.length > 0 ? result.o : [''],
-            };
-            setPico(generatedPico);
-            // Auto-generate keywords right after PICO generation
-            await handleGenerateKeywords(generatedPico);
-            toast.success("PICO and keywords generated from your question!");
+            const generatedConcepts = [];
+            
+            // Convert PICO result to new concept schema
+            const picoTypes = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
+            Object.entries(picoTypes).forEach(([key, type]) => {
+                if (result[key] && result[key].length > 0 && result[key][0].trim() !== '') {
+                    generatedConcepts.push({
+                        id: `pico_${key}_${Date.now()}`,
+                        name: result[key][0],
+                        type: type,
+                        synonyms: result[key].slice(1).filter(item => item.trim() !== ''),
+                        keywords: [],
+                        controlled_vocabulary: []
+                    });
+                }
+            });
+            
+            setConcepts(generatedConcepts);
+                        
+            toast.success("PICO concepts generated from your question!");
         } catch (err) {
             toast.error(`Failed to generate PICO: ${err.message}`);
         } finally {
@@ -188,89 +187,180 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         setPicoSuggestions({ isOpen: false, category: null, suggestions: [], loading: false });
     };
 
-    const handleGenerateKeywords = async (picoData = pico) => {
+    const handleGenerateKeywords = async (conceptsData = concepts, keywordStyle = 'balanced') => {
+        if (!conceptsData || !Array.isArray(conceptsData) || conceptsData.length === 0) {
+            return toast.error('No concepts defined. Please generate PICO concepts first.');
+        }
+        
         setIsLoading(true);
-        const hasInput = Object.values(picoData).some(arr => arr.some(item => item.trim() !== ''));
-        if (!hasInput) {
-            toast.error('Please fill in at least one PICO field.');
-            setIsLoading(false);
-            return;
-        }
-        let vocabInstructions = 'For the "controlled_vocabulary" array: ';
-        if (selectedDBs.pubmed) {
-            vocabInstructions += 'Generate 2-3 relevant MeSH terms, where each is an object like {"term": "Term Name", "type": "MeSH"}. ';
-        }
-        if (selectedDBs.embase) {
-            vocabInstructions += 'Generate 2-3 relevant Emtree terms, where each is an object like {"term": "Term Name", "type": "Emtree"}. ';
-        }
-        if (!selectedDBs.pubmed && !selectedDBs.embase) {
-            vocabInstructions = 'The "controlled_vocabulary" array must be empty.';
-        }
-        const prompt = `For each PICO category provided in ${JSON.stringify(picoData)}, generate search terms. For "keywords", provide a JSON array of 5-7 synonym strings. ${vocabInstructions} Return ONLY a single, valid JSON object with keys "population", "intervention", "comparison", "outcome".`;
         try {
-            const result = await callGeminiAPI(prompt);
-            const formattedKeywords = {};
-            for (const category of ['population', 'intervention', 'comparison', 'outcome']) {
-                const keywordsArray = Array.isArray(result[category]?.keywords) ? result[category].keywords : [];
-                const vocabArray = Array.isArray(result[category]?.controlled_vocabulary) ? result[category].controlled_vocabulary : [];
-                formattedKeywords[category] = {
-                    keywords: keywordsArray.map(term => ({ term, active: true, source: 'ai' })),
-                    controlled_vocabulary: vocabArray.map(item => ({ ...item, active: true, source: 'ai' })),
-                };
+            
+            const conceptDescriptions = conceptsData.map(concept => {
+                const synonyms = concept.synonyms.filter(syn => syn.trim() !== '').join('; ');
+                const synonymText = synonyms ? ` (Synonyms: ${synonyms})` : '';
+                return `${concept.name}${synonymText}`;
+            });
+            
+            if (conceptDescriptions.length === 0) {
+                return toast.error('No valid concepts found. Please add some concepts first.');
             }
-            setKeywords(formattedKeywords);
-            toast.success("Keywords generated successfully!");
+            
+            let vocabInstructions = 'For the "controlled_vocabulary" array: ';
+            if (selectedDBs.pubmed) {
+                vocabInstructions += 'Generate 2-3 relevant MeSH terms, where each is an object like {"term": "Term Name", "type": "MeSH"}. ';
+            }
+            if (selectedDBs.embase) {
+                vocabInstructions += 'Generate 2-3 relevant Emtree terms, where each is an object like {"term": "Term Name", "type": "Emtree"}. ';
+            }
+            if (!selectedDBs.pubmed && !selectedDBs.embase) {
+                vocabInstructions = 'The "controlled_vocabulary" array must be empty.';
+            }
+            
+            const prompt = `For each concept provided: ${conceptDescriptions.join('; ')}, generate search terms based on the concept name and its synonyms. ${keywordGenerationStyles[keywordStyle].aiPrompt || keywordGenerationStyles.balanced.aiPrompt} ${vocabInstructions} 
+
+IMPORTANT: Return ONLY a single, valid JSON object where each key is the EXACT concept name as provided. For example, if you have a concept called "Healthcare Professionals", the key should be "Healthcare Professionals", not "healthcare_professionals" or "healthcareprofessionals".
+
+Each concept should have this structure:
+{
+  "keywords": ["term1", "term2", "term3"],
+  "controlled_vocabulary": [{"term": "Term Name", "type": "MeSH"}]
+}
+
+Return ONLY the JSON object with no additional text.`;
+            
+            console.log('AI Prompt:', prompt);
+            const result = await callGeminiAPI(prompt);
+            console.log('AI Response:', result);
+            
+            const updatedConcepts = conceptsData.map(concept => {
+                let conceptData = result[concept.name];
+                let keywords = [];
+                let controlled_vocabulary = [];
+                
+                if (Array.isArray(conceptData)) {
+                    keywords = conceptData;
+                } else if (conceptData && typeof conceptData === 'object') {
+                    keywords = Array.isArray(conceptData.keywords) ? conceptData.keywords : [];
+                    controlled_vocabulary = Array.isArray(conceptData.controlled_vocabulary) ? conceptData.controlled_vocabulary : [];
+                }
+                
+                const updatedConcept = {
+                    ...concept,
+                    keywords: keywords.map(term => ({
+                        term,
+                        active: true,
+                        source: 'ai',
+                        searchField: 1
+                    })),
+                    controlled_vocabulary: controlled_vocabulary.map(item => ({
+                        ...item,
+                        active: true,
+                        source: 'ai'
+                    }))
+                };
+                
+                return updatedConcept;
+            });
+            
+            setConcepts(updatedConcepts);
+                        
+            toast.success(`Keywords generated with ${keywordStyle} style!`);
+            
         } catch (err) {
-            toast.error(`Keyword generation failed: ${err.message}`);
+            toast.error(`Failed to generate keywords: ${err.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleTestParameters = () => {
-        const testPico = { p: ["adults", "hypertension"], i: ["telemedicine"], c: ["usual care"], o: ["blood pressure control"] };
+        const testConcepts = [
+            {
+                id: "pico_p_test",
+                name: "adults with hypertension",
+                type: "population",
+                synonyms: ["adults", "hypertension"],
+                keywords: [],
+                controlled_vocabulary: []
+            },
+            {
+                id: "pico_i_test",
+                name: "telemedicine",
+                type: "intervention",
+                synonyms: ["telemedicine"],
+                keywords: [],
+                controlled_vocabulary: []
+            },
+            {
+                id: "pico_c_test",
+                name: "usual care",
+                type: "comparison",
+                synonyms: ["usual care"],
+                keywords: [],
+                controlled_vocabulary: []
+            },
+            {
+                id: "pico_o_test",
+                name: "blood pressure control",
+                type: "outcome",
+                synonyms: ["blood pressure control"],
+                keywords: [],
+                controlled_vocabulary: []
+            }
+        ];
         const testRQ = "In adults with hypertension, is telemedicine effective compared to usual care for blood pressure control?";
-        setPico(testPico);
+        setConcepts(testConcepts);
         setResearchQuestion(testRQ);
         toast("Test parameters loaded!");
-        handleGenerateKeywords(testPico);
     };
     
-    const generateSingleQuery = (dbKey, fieldOverride) => {
-        if (!keywords) return '';
+    const generateSingleQuery = (dbKey) => {
+        if (!concepts || concepts.length === 0) return '';
         const { syntax } = DB_CONFIG[dbKey];
-        const picoToKeywordMap = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
     
-        const parts = ['p', 'i', 'c', 'o'].map(catKey => {
-            const keywordCategory = keywords[picoToKeywordMap[catKey]];
-            if (!keywordCategory) return null;
+        const parts = [];
+        
+        concepts.forEach(concept => {
+            if (!concept.keywords || concept.keywords.length === 0) return;
     
             let activeTerms = [];
     
             // OPTIMIZED LOGIC FOR PUBMED: Combine MeSH and Keywords with OR
             if (dbKey === 'pubmed') {
-                const meshTerms = keywordCategory.controlled_vocabulary
+                const meshTerms = concept.controlled_vocabulary
                     .filter(v => v.active && v.type.toLowerCase() === 'mesh')
                     .map(v => syntax.mesh(v.term));
-    
-                const keywordTerms = keywordCategory.keywords
+
+                const keywordTerms = concept.keywords
                     .filter(k => k.active)
-                    .map(k => syntax.phrase(k.term, fieldOverride || searchFieldOptions[dbKey]));
-    
+                    .map(k => {
+                        const searchField = k.searchField;
+
+                        const dbField = DB_CONFIG[dbKey].searchFields[searchField];
+                        return syntax.phrase(k.term, dbField);
+                    });
+
                 activeTerms = [...meshTerms, ...keywordTerms];
-    
+
             } else {
-            // ADVANCED LOGIC FOR ALL OTHER DATABASES
+                // ADVANCED LOGIC FOR ALL OTHER DATABASES
                 activeTerms = [
-                    ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, fieldOverride || searchFieldOptions[dbKey])),
-                    ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, fieldOverride || searchFieldOptions[dbKey]))
+                    ...concept.keywords.filter(k => k.active).map(k => {
+                        const searchField = k.searchField;
+                        const dbField = DB_CONFIG[dbKey].searchFields[searchField];
+
+                        return syntax.phrase(k.term, dbField);
+                    }),
+                    ...concept.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, dbField))
                 ];
             }
     
-            return activeTerms.length > 0 ? `(${activeTerms.join(' OR ')})` : null;
-        }).filter(Boolean);
+            if (activeTerms.length > 0) {
+                parts.push(`(${activeTerms.join(' OR ')})`);
+            }
+        });
     
-        let finalQuery = parts.join(` ${syntax.separator} `);
+        let finalQuery = parts.join(`\n\n${syntax.separator}\n\n `);
     
         const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
         if (activeNegative.length > 0) {
@@ -282,8 +372,8 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         return finalQuery.trim();
     };
 
-    const fetchAndSetCount = async (dbKey, fieldOverride) => {
-        const query = generateSingleQuery(dbKey, fieldOverride);
+    const fetchAndSetCount = async (dbKey) => {
+        const query = generateSingleQuery(dbKey);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
         setSearchCounts(prev => ({ ...prev, [dbKey]: { ...prev[dbKey], loading: true } }));
         if (!query) {
@@ -311,13 +401,6 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         }
     };
     
-    const handleSearchFieldChange = (dbKey, newField) => {
-
-        setSearchFieldOptions({...searchFieldOptions, [dbKey]: newField });
-
-        setTimeout(() => fetchAndSetCount(dbKey, newField), 100);
-    };
-
     useEffect(() => {
         if (step === 2) {
             (async () => {
@@ -521,7 +604,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         <nav aria-label="Progress"><ol role="list" className="flex items-center">
             {['Define', 'Query', 'Results'].map((name, index) => {
                 const s = index + 1;
-                const canNavigate = !!keywords;
+                const canNavigate = concepts && concepts.length > 0 && concepts.some(concept => concept.keywords && concept.keywords.length > 0);
                 return (<li key={name} className={cn("relative", index !== 2 ? "pr-8 sm:pr-20" : "")}> 
                     {step > s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-indigo-600" /></div><button disabled={!canNavigate} onClick={() => setStep(s)} className="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-900 disabled:bg-gray-400"><CheckIcon className="h-5 w-5 text-white" /></button></>) 
                     : step === s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-indigo-600 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /></span></>) 
@@ -547,7 +630,9 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             <QueryRefinementModal 
                 modalData={refineModalData}
                 onClose={() => setRefineModalData(null)}
-                onApplyChanges={setKeywords}
+                onApplyChanges={(updatedKeywords) => {
+                    setRefineModalData(null);
+                }}
             />
             {selectedArticle && <ArticleDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
             {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={initialArticles} hasDeduplicated={!!deduplicationResult} onExport={exportHandler} />}
@@ -568,14 +653,14 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                         <div className="mb-8">{renderStepIndicator()}</div>
                         {step === 1 && (
                             <DefineStep
-                                state={{ researchQuestion, pico, isLoading, keywords }}
-                                actions={{ setResearchQuestion, setPico, handleGenerateKeywords, handleGeneratePicoFromQuestion, setKeywords, setStep, showMenu, findSynonyms, handleAddKeyword, onBackToDashboard }}
+                                state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle }}
+                                actions={{ setResearchQuestion, setConcepts, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleGeneratePicoFromQuestion, setStep, showMenu, findSynonyms, onBackToDashboard }}
                             />
                         )}
                         {step === 2 && (
                             <QueryBuilder
-                                state={{ queries, searchCounts, isSearching, selectedDBs, negativeKeywords, searchFieldOptions, keywords }}
-                                actions={{ setStep, handleRunSearch, setNegativeKeywords, handleDbSelectionChange, handleSearchFieldChange, setRefineModalData }}
+                                state={{ queries, searchCounts, isSearching, selectedDBs, concepts }}
+                                actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData }}
                             />
                         )}
                         {step === 3 && (
