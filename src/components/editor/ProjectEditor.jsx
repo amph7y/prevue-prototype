@@ -56,7 +56,8 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
 
     const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false, core: true });
     const [retmax, setRetmax] = useState(25);
-    
+    const [enabledControlledVocabTypes, setEnabledControlledVocabTypes] = useState({ mesh: true });
+
     // State for Modals
     const [picoSuggestions, setPicoSuggestions] = useState({ isOpen: false, category: null, suggestions: [], loading: false });
     const [thesaurusData, setThesaurusData] = useState({ isOpen: false, word: '', synonyms: [], loading: false, context: null });
@@ -91,13 +92,24 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         debounceTimeout.current = setTimeout(() => {
             const docRef = doc(db, `users/${userId}/projects/${project.id}`);
             const dataToSave = { researchQuestion, concepts, negativeKeywords, keywordStyle, lastSaved: serverTimestamp() };
-            console.log('Saving project data to database:', dataToSave);
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
         return () => clearTimeout(debounceTimeout.current);
     }, [researchQuestion, concepts, negativeKeywords, keywordStyle, project.id, userId]);
 
+    useEffect(() => {
+        if (step === 2) {
+            const keys = Object.keys(selectedDBs).filter(k => selectedDBs[k]);
+            keys.forEach(dbKey => {
+                const query = generateSingleQuery(dbKey, enabledControlledVocabTypes);
+                setQueries(prev => ({ ...prev, [dbKey]: query }));
 
+                if (query) {
+                    fetchAndSetCount(dbKey);
+                }
+            });
+        }
+    }, [enabledControlledVocabTypes, step, selectedDBs]);
 
     const findSynonyms = async (word, context) => {
         if (!word) return toast.error("Please provide a word to search.");
@@ -228,9 +240,7 @@ Each concept should have this structure:
 
 Return ONLY the JSON object with no additional text.`;
             
-            console.log('AI Prompt:', prompt);
             const result = await callGeminiAPI(prompt);
-            console.log('AI Response:', result);
             
             const updatedConcepts = conceptsData.map(concept => {
                 let conceptData = result[concept.name];
@@ -314,7 +324,7 @@ Return ONLY the JSON object with no additional text.`;
         toast("Test parameters loaded!");
     };
     
-    const generateSingleQuery = (dbKey) => {
+    const generateSingleQuery = (dbKey, enabledTypes = {}) => {
         if (!concepts || concepts.length === 0) return '';
         const { syntax } = DB_CONFIG[dbKey];
     
@@ -325,11 +335,13 @@ Return ONLY the JSON object with no additional text.`;
     
             let activeTerms = [];
     
-            // OPTIMIZED LOGIC FOR PUBMED: Combine MeSH and Keywords with OR
+            // OPTIMIZED LOGIC FOR PUBMED: Combine controlled vocabulary and Keywords with OR
             if (dbKey === 'pubmed') {
-                const meshTerms = concept.controlled_vocabulary
-                    .filter(v => v.active && v.type.toLowerCase() === 'mesh')
-                    .map(v => syntax.mesh(v.term));
+                // Include controlled vocabulary terms based on enabled types
+                const controlledVocabTerms = concept.controlled_vocabulary
+                    .filter(v => v.active && enabledTypes[v.type.toLowerCase()])
+                    .map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : null)
+                    .filter(term => term !== null);
 
                 const keywordTerms = concept.keywords
                     .filter(k => k.active)
@@ -340,7 +352,7 @@ Return ONLY the JSON object with no additional text.`;
                         return syntax.phrase(k.term, dbField);
                     });
 
-                activeTerms = [...meshTerms, ...keywordTerms];
+                activeTerms = [...controlledVocabTerms, ...keywordTerms];
 
             } else {
                 // ADVANCED LOGIC FOR ALL OTHER DATABASES
@@ -351,7 +363,7 @@ Return ONLY the JSON object with no additional text.`;
 
                         return syntax.phrase(k.term, dbField);
                     }),
-                    ...concept.controlled_vocabulary.filter(v => v.active).map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : syntax.phrase(v.term, dbField))
+                    ...concept.controlled_vocabulary.filter(v => v.active && syntax[v.type.toLowerCase()]).map(v => syntax[v.type.toLowerCase()](v.term) )
                 ];
             }
     
@@ -373,7 +385,7 @@ Return ONLY the JSON object with no additional text.`;
     };
 
     const fetchAndSetCount = async (dbKey) => {
-        const query = generateSingleQuery(dbKey);
+        const query = generateSingleQuery(dbKey, enabledControlledVocabTypes);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
         setSearchCounts(prev => ({ ...prev, [dbKey]: { ...prev[dbKey], loading: true } }));
         if (!query) {
@@ -411,7 +423,6 @@ Return ONLY the JSON object with no additional text.`;
     }, [step]);
     
     const handleRunSearch = async (isUpdate = false) => {
-        console.log("1. Search function started.");
         setIsSearching(true);
         if (!isUpdate) {
             setDeduplicationResult(null);
@@ -421,10 +432,9 @@ Return ONLY the JSON object with no additional text.`;
         const currentQueries = {};
         Object.keys(selectedDBs).forEach(dbKey => {
             if (selectedDBs[dbKey]) {
-                currentQueries[dbKey] = generateSingleQuery(dbKey);
+                currentQueries[dbKey] = generateSingleQuery(dbKey, enabledControlledVocabTypes);
             }
         });
-        console.log("2. Queries generated:", currentQueries);
         setQueries(currentQueries);
         setInitialArticles([]);
         setSearchResults(null);
@@ -434,7 +444,6 @@ Return ONLY the JSON object with no additional text.`;
         const keys = Object.keys(currentQueries);
         const totals = {};
         const tasks = keys.map(dbKey => (async () => {
-            console.log(`3. Searching ${dbKey}...`);
             const query = currentQueries[dbKey];
             try {
                 const response = await retryAsync(async () => {
@@ -448,7 +457,6 @@ Return ONLY the JSON object with no additional text.`;
                 const articles = response.data || response; // Fallback for old format
                 const total = response.total || 0;
                 
-                console.log(`4. Found ${articles.length} articles from ${dbKey} (${total} total available).`);
                 results[dbKey] = { status: 'success', data: articles };
                 totals[dbKey] = total;
                 allFetchedArticles.push(...articles);
@@ -462,8 +470,6 @@ Return ONLY the JSON object with no additional text.`;
 
         await Promise.all(tasks);
 
-        console.log("5. All searches complete. Final results:", results);
-        console.log("6. Search totals:", totals);
         setSearchResults(results);
         setInitialArticles(allFetchedArticles);
         setSearchTotals(totals); // Store the totals from search results
@@ -472,13 +478,11 @@ Return ONLY the JSON object with no additional text.`;
         if (!isUpdate) {
             const anyFailure = Object.values(results).some(r => r.status === 'error');
             if (anyFailure) return; // stay on Query step
-            console.log("7. Navigating to Results.");
             setStep(3);
         }
     };
 
     const handlePaginatedSearch = async (dbKey, page, pageSize = 25) => {
-        console.log(`Paginated search for ${dbKey}, page ${page}, pageSize: ${pageSize}`);
         const query = queries[dbKey];
         if (!query) return [];
 
@@ -493,7 +497,6 @@ Return ONLY the JSON object with no additional text.`;
             
             // Extract articles from response (handle both old and new format)
             const articles = response.data || response;
-            console.log(`Found ${articles.length} articles from ${dbKey} page ${page}`);
             return articles;
         } catch (err) {
             console.error(`Error searching ${dbKey} page ${page}:`, err);
@@ -659,8 +662,8 @@ Return ONLY the JSON object with no additional text.`;
                         )}
                         {step === 2 && (
                             <QueryBuilder
-                                state={{ queries, searchCounts, isSearching, selectedDBs, concepts }}
-                                actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData }}
+                                state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes }}
+                                actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes }}
                             />
                         )}
                         {step === 3 && (

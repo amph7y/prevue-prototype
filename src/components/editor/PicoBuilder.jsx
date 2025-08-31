@@ -13,7 +13,7 @@ const PicoBuilder = ({ state, actions, showOnlyConcepts = false }) => {
             id: `concept_${Date.now()}`,
             name: name ?? type,
             type: type,
-            synonyms: [''],
+            synonyms: [],
             keywords: [],
             controlled_vocabulary: []
         };
