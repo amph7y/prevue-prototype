@@ -62,7 +62,12 @@ function AppContent() {
   }
 
   if (currentView === 'login' && !isAuthenticated) {
-    return <LoginPage onSuccess={handleLoginSuccess} />;
+    return (
+      <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
+
+        <LoginPage onSuccess={handleLoginSuccess} onBackToLanding={handleBackToLanding} />
+        <DownloadCenter />
+      </GlobalDownloadProvider>);
   }
 
 

@@ -111,22 +111,18 @@ function LandingPage({ onGetStarted }) {
 
   return (
       <div className="bg-white text-text-dark font-inter">
-        <div className="absolute top-0 left-0 w-full z-10 py-4 px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl flex justify-between items-center">
-            <div className="flex items-center">
-              <svg className="h-8 w-8 text-main" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
-              </svg>
-              <span className="ml-2 text-2xl font-bold text-text-dark">PreVue</span>
-            </div>
+        <Header 
+          onLogoClick={() => {}} // No action needed on landing page
+          showNav={false}
+          actionButton={
             <button
               onClick={onGetStarted}
               className="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main"
             >
               Test Prototype
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Hero Section */}
         <main className="relative isolate">
