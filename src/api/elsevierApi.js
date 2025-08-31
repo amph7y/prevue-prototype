@@ -1,10 +1,8 @@
 
-const SEARCH_ELSEVIER_URL = 'https://searchelsevier-mq6lqjahiq-uc.a.run.app';
-
 async function fetchElsevierData(dbKey, query, retmax = 25, start = 0) {
     if (!query) return { 'search-results': { 'opensearch:totalResults': 0, entry: [] } };
     
-    const response = await fetch(`${SEARCH_ELSEVIER_URL}`, {
+    const response = await fetch(`${import.meta.env.VITE_ELSEVIER_FB_URL}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

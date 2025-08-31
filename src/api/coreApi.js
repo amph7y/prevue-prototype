@@ -1,10 +1,8 @@
 
-const SEARCH_CORE_URL = 'https://searchcore-mq6lqjahiq-uc.a.run.app';
-
 async function fetchCoreData(query, offset = 0, limit = 25) {
   if (!query) return { totalHits: 0, data: [] };
 
-  const response = await fetch(`${SEARCH_CORE_URL}`, {
+  const response = await fetch(`${import.meta.env.VITE_CORE_FB_URL}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

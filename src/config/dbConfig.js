@@ -1,11 +1,23 @@
-export const DB_CONFIG = {
+// Unified search field definitions
+const UNIFIED_SEARCH_FIELDS = {
+    1: 'Title/Abstract',
+    2: 'Title Only',
+    3: 'Abstract Only', 
+    4: 'All Fields'
+};
+
+const DB_CONFIG = {
     pubmed: {
         name: 'PubMed',
         searchFields: {
-            'tiab': 'Title/Abstract',
-            'tw': 'Text Word',
-            'all': 'All Fields',
-            'ti': 'Title Only'
+            // 'tiab': 'Title/Abstract',
+            // 'ti': 'Title Only',
+            // 'tw': 'Text Word',
+            // 'all': 'All Fields'
+            '1': 'tiab',
+            '2': 'ti',
+            '3': 'ab',
+            '4': 'all'
         },
         syntax: {
             phrase: (term, field) => `"${term}"[${field}]`,
@@ -18,15 +30,19 @@ export const DB_CONFIG = {
     scopus: {
         name: 'Scopus',
         searchFields: {
-            'TITLE-ABS-KEY': 'Title/Abstract/Keyword',
-            'ALL': 'All Fields',
-            'TITLE': 'Title Only',
-            'ABS': 'Abstract Only'
+            // 'TITLE-ABS-KEY': 'Title/Abstract/Keyword',
+            // 'TITLE': 'Title Only',
+            // 'ABS': 'Abstract Only',
+            // 'ALL': 'All Fields'
+            '1': 'TITLE-ABS-KEY',
+            '2': 'TITLE',
+            '3': 'ABS',
+            '4': 'ALL'
         },
         syntax: {
             // This syntax correctly uses the selected field, e.g., TITLE("term")
             phrase: (term, field) => `${field}("${term}")`,
-            // mesh: (term, field) => `${field}("${term}")`, // Scopus uses generic field searches
+            // mesh: (term, field) => `TITLE-ABS-KEY("${term}")`, // Scopus uses generic field searches
             emtree: (term, field) => `INDEXTERMS("${term}")`, // Scopus can search Emtree index terms
             separator: ' AND ',
             not: 'AND NOT'
@@ -35,13 +51,18 @@ export const DB_CONFIG = {
     core: {
         name: 'CORE',
         searchFields: {
-            'all': 'All Fields',
-            'title': 'Title Only',
-            'abstract': 'Abstract Only'
+            // 'all': 'Title/Abstract',
+            // 'title': 'Title Only',
+            // 'abstract': 'Abstract Only',
+            // 'all': 'All Fields',
+            '1': 'all',
+            '2': 'title',
+            '3': 'abstract',
+            '4': 'all'
         },
         syntax: {
             phrase: (term, field) => field === 'all' ? `"${term}"` : `${field}:"${term}"`,
-            mesh: (term) => `"${term}"`,
+            // mesh: (term) => `"${term}"`,
             emtree: (term) => `"${term}"`,
             separator: ' AND ',
             not: 'NOT'
@@ -91,3 +112,5 @@ export const DB_CONFIG = {
         }
     },
 };
+
+export { DB_CONFIG, UNIFIED_SEARCH_FIELDS };

@@ -101,7 +101,7 @@ function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
             {isAiModalOpen && <AiProjectCreationModal onClose={() => setIsAiModalOpen(false)} onCreateProject={handleCreateProject} isCreating={isCreating} />}
             {isGapFinderModalOpen && <GapFinderModal onClose={() => setIsGapFinderModalOpen(false)} />}
 
-            <Header title="Prevue" subtitle="Dashboard" onBackButtonClicked={onBackToLanding} backButtonText="Back to Home" />
+            <Header subtitle="Dashboard" onBackButtonClicked={onBackToLanding} backButtonText="Back to Home" onLogoClick={onBackToLanding} />
             
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">

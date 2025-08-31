@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import Spinner from '../common/Spinner.jsx';
 import { GoogleIcon } from '../common/Icons.jsx';
+import Header from '../common/Header.jsx';
 
-const LoginPage = ({ onSuccess }) => {
+const LoginPage = ({ onSuccess, onBackToLanding }) => {
     const { signInWithGoogle, loading } = useAuth();
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -34,7 +35,13 @@ const LoginPage = ({ onSuccess }) => {
     }
 
     return (
-        <div className="min-h-screen hero-bg flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-inter">
+        <>
+            <Header 
+                onBackButtonClicked={onBackToLanding}
+                backButtonText="Back to Home"
+                onLogoClick={onBackToLanding}
+            />
+            <div className="min-h-screen hero-bg flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-inter">
                 <div className="max-w-md w-full space-y-8">
                     <div className="text-center">
                         <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-white shadow-lg">
@@ -78,6 +85,7 @@ const LoginPage = ({ onSuccess }) => {
 
                 </div>
             </div>
+        </>
     );
 };
 
