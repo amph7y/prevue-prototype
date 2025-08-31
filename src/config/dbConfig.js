@@ -16,7 +16,7 @@ const DB_CONFIG = {
             // 'all': 'All Fields'
             '1': 'tiab',
             '2': 'ti',
-            '3': 'tiab',
+            '3': 'ab',
             '4': 'all'
         },
         syntax: {
@@ -42,7 +42,7 @@ const DB_CONFIG = {
         syntax: {
             // This syntax correctly uses the selected field, e.g., TITLE("term")
             phrase: (term, field) => `${field}("${term}")`,
-            mesh: (term, field) => `TITLE-ABS-KEY("${term}")`, // Scopus uses generic field searches
+            // mesh: (term, field) => `TITLE-ABS-KEY("${term}")`, // Scopus uses generic field searches
             emtree: (term, field) => `INDEXTERMS("${term}")`, // Scopus can search Emtree index terms
             separator: ' AND ',
             not: 'AND NOT'
@@ -62,7 +62,7 @@ const DB_CONFIG = {
         },
         syntax: {
             phrase: (term, field) => field === 'all' ? `"${term}"` : `${field}:"${term}"`,
-            mesh: (term) => `"${term}"`,
+            // mesh: (term) => `"${term}"`,
             emtree: (term) => `"${term}"`,
             separator: ' AND ',
             not: 'NOT'

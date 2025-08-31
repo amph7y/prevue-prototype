@@ -35,6 +35,13 @@ const DefineStep = ({ state, actions }) => {
     setIsGeneratingKeywords(true);
     try {
       await handleGenerateKeywords(concepts, keywordStyle);
+      // Scroll to the Keyword Generation Style section after keywords are generated
+      setTimeout(() => {
+        const keywordStyleSection = document.getElementById('keyword-generation-style-section');
+        if (keywordStyleSection) {
+          keywordStyleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
     } catch (error) {
       console.error('Error generating keywords:', error);
     } finally {
@@ -67,7 +74,31 @@ const DefineStep = ({ state, actions }) => {
   return (
     <>
       <div className="mt-10">
-        <h2 className="text-2xl font-bold">1. Define Your Research Question</h2>
+        {!isFreshProject && hasKeywords && (
+          <div className="flex justify-between items-center mb-10 ">
+            
+              <button 
+                type="button" 
+                onClick={onBackToDashboard} 
+                className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />
+                Back to Dashboard
+              </button>
+            
+            
+              <button 
+                type="button" 
+                onClick={() => setStep(2)} 
+                className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700"
+              >
+                Continue to Query
+                <ArrowUturnRightIcon className="h-5 w-5" />
+              </button>
+          </div>
+        )}
+
+        <h2 className="text-2xl font-bold">Step 1. Define Your Research Question</h2>
         <div className="mt-6">
           <div className="flex justify-between items-center mb-2">
             <label className="block text-lg font-semibold">Research Question</label>
@@ -190,7 +221,7 @@ const DefineStep = ({ state, actions }) => {
           </div>
 
           {/* Keyword Generation Style Section */}
-          <div className="mt-10">
+          <div id="keyword-generation-style-section" className="mt-10">
             <h3 className="text-xl font-semibold">Keyword Generation Style</h3>
             <p className="mt-2 text-gray-600">
               Choose how comprehensive you want the generated keywords to be.
