@@ -84,6 +84,7 @@ function AppContent() {
           <ProjectDashboard 
             onSelectProject={setActiveProject} 
             userId={userId} 
+            user={user}
             onBackToLanding={handleBackToLanding} 
           />
         )}

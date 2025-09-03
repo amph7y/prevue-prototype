@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase.js';
 import toast from 'react-hot-toast';
 import { cn } from '../../utils/cn.js';
+import { handleError } from '../../utils/utils.js';
 import { PROJECT_COLORS } from '../../config/constants.js';
 import { FolderPlusIcon, SearchIcon, SparklesIcon, LightBulbIcon } from '../common/Icons.jsx';
 import AiProjectCreationModal from './AiProjectCreationModal.jsx';
@@ -10,7 +11,7 @@ import GapFinderModal from './GapFinderModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import Header from '../common/Header.jsx';
 
-function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
+function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding }) {
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [newProjectName, setNewProjectName] = useState('');
@@ -37,7 +38,7 @@ function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
             setIsLoading(false);
         }, (error) => {
             console.error("Error fetching projects: ", error);
-            toast.error(`Error fetching projects: ${error.message}`);
+            handleError(error, 'fetching projects');
             setIsLoading(false);
         });
 
@@ -57,16 +58,18 @@ function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
                 name: name,
                 createdAt: serverTimestamp(),
                 color: color,
-                pico: pico || { p: [''], i: [''], c: [''], o: [''] },
                 researchQuestion: researchQuestion,
-                initialStep: pico ? 2 : 1 // Start at step 2 if PICO is pre-filled
+                initialStep: pico ? 2 : 1, // Start at step 2 if PICO is pre-filled
+                userId: userId,
+                userName: user?.displayName || user?.email || 'Unknown User',
+                userEmail: user?.email || null
             };
             const docRef = await addDoc(collection(db, projectsCollectionPath), newProjectData);
             toast.success(`Project '${name}' created!`);
             onSelectProject({ id: docRef.id, ...newProjectData });
         } catch (error) {
             console.error("Error creating project: ", error);
-            toast.error(`Error creating project: ${error.message}`);
+            handleError(error, 'creating project');
         } finally {
             setIsCreating(false);
             setNewProjectName('');
@@ -92,7 +95,25 @@ function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
             toast.success('Thanks for your feedback!');
         } catch (error) {
             console.error('Failed to record feedback:', error);
-            toast.error('Failed to record feedback. Please try again later.');
+            handleError(error, 'recording feedback');
+        }
+    };
+
+    const handleDeleteProject = async (projectId, projectName) => {
+        if (!userId || !db) return;
+        
+        // Confirm deletion
+        if (!window.confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
+            return;
+        }
+        
+        try {
+            const projectRef = doc(db, `users/${userId}/projects`, projectId);
+            await deleteDoc(projectRef);
+            toast.success(`Project "${projectName}" deleted successfully!`);
+        } catch (error) {
+            console.error('Failed to delete project:', error);
+            handleError(error, 'deleting project');
         }
     };
     
@@ -166,6 +187,20 @@ function ProjectDashboard({ onSelectProject, userId, onBackToLanding }) {
                                                 <div className="flex-1 truncate px-4 py-2 text-sm">
                                                     <button onClick={() => onSelectProject(project)} className="font-medium text-gray-900 hover:text-indigo-600 text-left w-full truncate">{project.name}</button>
                                                     <p className="text-gray-500">{project.createdAt?.toDate().toLocaleDateString()}</p>
+                                                </div>
+                                                <div className="flex-shrink-0 pr-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteProject(project.id, project.name);
+                                                        }}
+                                                        className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-colors"
+                                                        title="Delete project"
+                                                    >
+                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
                                                 </div>
                                             </div>
                                         </li>

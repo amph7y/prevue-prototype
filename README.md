@@ -31,3 +31,12 @@ This is a React-based application for streamlining the systematic review and lit
 2.  Run the development server:
     ```bash
 d    ```
+
+## Secrets
+To update firebase secrets, cd to functions/ folder and use the following commands (firebase CLI needs to be installed):
+
+1. firebase login
+
+2. firebase functions:secrets:set GEMINI_API_KEY
+
+3. firebase deploy --only functions

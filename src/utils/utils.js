@@ -1,6 +1,21 @@
 
+import toast from 'react-hot-toast';
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Standardized error handling for user-facing messages
+export function handleError(error, context = '', showToast = true) {
+    console.error(`Error${context ? ` in ${context}` : ''}:`, error);
+    
+    const userMessage = 'An error occurred. Please contact the administrator if this persists.';
+    
+    if (showToast) {
+        toast.error(userMessage);
+    }
+    
+    return userMessage;
 }
 
 

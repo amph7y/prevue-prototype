@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../config/firebase.js';
 import toast from 'react-hot-toast';
+import { handleError } from '../utils/utils.js';
 
 const AuthContext = createContext();
 
@@ -62,7 +63,7 @@ export const AuthProvider = ({ children }) => {
             } else if (error.code === 'auth/popup-blocked') {
                 toast.error('Pop-up was blocked. Please allow pop-ups and try again.');
             } else {
-                toast.error(`Sign-in failed: ${error.message}`);
+                handleError(error, 'sign-in');
             }
             
             return { success: false, error };
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }) => {
             return { success: true };
         } catch (error) {
             console.error('Sign-out error:', error);
-            toast.error(`Sign-out failed: ${error.message}`);
+            handleError(error, 'sign-out');
             return { success: false, error };
         }
     };

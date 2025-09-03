@@ -64,7 +64,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                             term: newTerm,
                             active: true,
                             source: 'manual',
-                            searchField: 1 // Default to Title/Abstract
+                            searchField: 4 // Default to All Fields
                         }];
                     } else if (type === 'controlled_vocabulary') {
                         updatedConcept.controlled_vocabulary = [...concept.controlled_vocabulary, {
@@ -131,7 +131,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                                 </button>
                                                 
                                                 <select
-                                                    value={kw.searchField || 1}
+                                                    value={kw.searchField || 4}
                                                     onChange={(e) => handleSearchFieldChange(concept.id, 'keywords', i, e.target.value)}
                                                     className="px-2 py-1 text-sm border border-gray-300 rounded bg-white"
                                                 >
