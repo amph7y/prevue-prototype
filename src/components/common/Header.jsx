@@ -3,7 +3,7 @@ import { DownloadIcon } from './Icons.jsx';
 import { useGlobalDownload } from '../../contexts/GlobalDownloadContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
-function Header({ title = "Prevue", subtitle = null, showNav = false, onBackButtonClicked, backButtonText = null, showDownloadButton = false, onLogoClick = null, actionButton = null }) {
+function Header({ title = "PreVue", subtitle = null, showNav = false, onBackButtonClicked, backButtonText = null, showDownloadButton = false, onLogoClick = null, actionButton = null }) {
   const { downloads, setIsOpen } = useGlobalDownload();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);

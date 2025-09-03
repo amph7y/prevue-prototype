@@ -41,6 +41,7 @@ const QueryBuilder = ({ state, actions }) => {
 
     return (
         <div className="mt-10">
+            {navButtons}
             <h2 className="text-2xl font-bold mt-8">Step 2. Build & Run Your Search</h2>
             <p className="mt-2 text-gray-600">Review the queries for each database. They update automatically when you change keywords or options.</p>
             
