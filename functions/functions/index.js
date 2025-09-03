@@ -34,6 +34,51 @@ setGlobalOptions({ maxInstances: 10 });
 //   response.send("Hello from Firebase!");
 // });
 
+exports.callGeminiApi = functions.https.onRequest({
+  secrets: ["GEMINI_API_KEY"]
+}, (req, res) => {
+  return cors(req, res, async () => {
+    try {
+      const { prompt } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ error: 'Prompt is required' });
+      }
+
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ message: 'Could not parse error response.' }));
+        throw new Error(`Gemini API error: ${response.statusText} - ${errorBody.error?.message || 'Unknown API error'}`);
+      }
+
+      const result = await response.json();
+      
+      try {
+        const parsedResult = JSON.parse(result.candidates[0].content.parts[0].text);
+        res.json(parsedResult);
+      } catch (parseError) {
+        console.error("Failed to parse Gemini API response:", result.candidates[0].content.parts[0].text);
+        throw new Error("The AI returned an invalid response format.");
+      }
+    } catch (error) {
+      console.error('Gemini API error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+});
+
 exports.searchCore = functions.https.onRequest({
     secrets: ["CORE_API_KEY"]
   }, (req, res) => {

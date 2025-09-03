@@ -7,6 +7,7 @@ import { db } from '../../config/firebase.js';
 import { DB_CONFIG } from '../../config/dbConfig.js';
 import { useContextMenu } from '../../hooks/useContextMenu.jsx';
 import { cn } from '../../utils/cn.js';
+import { handleError } from '../../utils/utils.js';
 
 // API Calls
 import { callGeminiAPI } from '../../api/geminiApi.js';
@@ -137,31 +138,78 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const handleGeneratePicoFromQuestion = async () => {
         if (!researchQuestion.trim()) return toast.error('Please enter a research question first.');
         setIsLoading(true);
-        const prompt = `Analyze this research question: "${researchQuestion}". Extract the PICO components (Population, Intervention, Comparison, Outcome). For each component, provide a single, concise phrase. Return ONLY a JSON object with keys "p", "i", "c", "o", where each value is an array with one string. If a component is missing, return an empty array.`;
+        
+        const prompt = `
+        You are an expert in information retrieval and research database searching.
+        
+        Analyze the following research question and break it into its core search concepts 
+        (for example: Population, Intervention, Comparison, Outcome, or other relevant concepts).
+
+        For each concept, provide up to 3 relevant search terms. Make sure the terms are different enough to provide wider search value.
+
+        Example:
+
+        Research Question: "What is the effectiveness of mindfulness on anxiety in healthcare professionals?"
+
+        Concepts:
+        - Population: "healthcare professionals"
+        - Intervention: "mindfulness"
+        - Outcome: "anxiety"
+        - Comparison: "usual care"
+                
+        Return ONLY valid JSON in the following format:
+        {
+          "concepts": [
+            { "name": "Concept Name", "terms": ["term1", "term2", "term3"] },
+            ...
+          ]
+        }
+        
+        Research Question: "${researchQuestion}"
+        `;
+                
         try {
             const result = await callGeminiAPI(prompt);
+            console.log(result);
             const generatedConcepts = [];
             
-            // Convert PICO result to new concept schema
-            const picoTypes = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
-            Object.entries(picoTypes).forEach(([key, type]) => {
-                if (result[key] && result[key].length > 0 && result[key][0].trim() !== '') {
-                    generatedConcepts.push({
-                        id: `pico_${key}_${Date.now()}`,
-                        name: result[key][0],
-                        type: type,
-                        synonyms: result[key].slice(1).filter(item => item.trim() !== ''),
-                        keywords: [],
-                        controlled_vocabulary: []
-                    });
-                }
-            });
-            
+            if (result.concepts && Array.isArray(result.concepts)) {
+                result.concepts.forEach((concept, index) => {
+                    if (concept.name && concept.terms && Array.isArray(concept.terms)) {
+                        // Determine concept type based on name or create custom type
+                        let conceptType = 'custom';
+                        const nameLower = concept.name.toLowerCase();
+                        
+                        if (nameLower.includes('population')) {
+                            conceptType = 'population';
+                        } else if (nameLower.includes('intervention')) {
+                            conceptType = 'intervention';
+                        } else if (nameLower.includes('comparison')) {
+                            conceptType = 'comparison';
+                        } else if (nameLower.includes('outcome')) {
+                            conceptType = 'outcome';
+                        }
+                        
+                        // Create concept with initial synonyms from the terms
+                        const [mainTerm, ...synonymTerms] = concept.terms;
+                        
+                        generatedConcepts.push({
+                            id: `concept_${Date.now()}_${index}`,
+                            name: mainTerm || concept.name,
+                            type: conceptType,
+                            synonyms: synonymTerms.filter(term => term.trim() !== ''),
+                            keywords: [],
+                            controlled_vocabulary: []
+                        });
+                    }
+                });
+            }
+                        
             setConcepts(generatedConcepts);
                         
-            toast.success("PICO concepts generated from your question!");
+            toast.success("Concepts generated from your research question!");
         } catch (err) {
-            toast.error(`Failed to generate PICO: ${err.message}`);
+            handleError(err, 'concept generation');
         } finally {
             setIsLoading(false);
         }
@@ -180,7 +228,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             const suggestions = await callGeminiAPI(prompt);
             setPicoSuggestions(prev => ({ ...prev, suggestions: Array.isArray(suggestions) ? suggestions : [], loading: false }));
         } catch (err) {
-            toast.error(`Failed to get suggestions: ${err.message}`);
+            handleError(err, 'PICO suggestions');
             setPicoSuggestions({ isOpen: false, category: null, suggestions: [], loading: false });
         }
     };
@@ -260,7 +308,7 @@ Return ONLY the JSON object with no additional text.`;
                         term,
                         active: true,
                         source: 'ai',
-                        searchField: 1
+                        searchField: 4
                     })),
                     controlled_vocabulary: controlled_vocabulary.map(item => ({
                         ...item,
@@ -277,7 +325,7 @@ Return ONLY the JSON object with no additional text.`;
             toast.success(`Keywords generated with ${keywordStyle} style!`);
             
         } catch (err) {
-            toast.error(`Failed to generate keywords: ${err.message}`);
+            handleError(err, 'keyword generation');
         } finally {
             setIsLoading(false);
         }
@@ -402,7 +450,7 @@ Return ONLY the JSON object with no additional text.`;
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
         } catch (err) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'Error', loading: false } }));
-            toast.error(`Failed to get count for ${dbKey} after retries: ${err.message}`);
+            handleError(err, `count retrieval for ${dbKey}`);
         }
     };
     
@@ -464,7 +512,7 @@ Return ONLY the JSON object with no additional text.`;
                 console.error(`Error searching ${dbKey}:`, err);
                 results[dbKey] = { status: 'error', message: err.message };
                 totals[dbKey] = 0;
-                toast.error(`Search failed for ${dbKey} after retries: ${err.message}`);
+                handleError(err, `search for ${dbKey}`);
             }
         })());
 
@@ -500,7 +548,7 @@ Return ONLY the JSON object with no additional text.`;
             return articles;
         } catch (err) {
             console.error(`Error searching ${dbKey} page ${page}:`, err);
-            toast.error(`Failed to load page ${page} for ${dbKey}: ${err.message}`);
+            handleError(err, `loading page ${page} for ${dbKey}`);
             return [];
         }
     };
@@ -599,7 +647,7 @@ Return ONLY the JSON object with no additional text.`;
             toast.success(`Exported ${itemsToExport.length} articles.`);
         } catch (error) {
             console.error('Export error:', error);
-            toast.error(`Failed to export ${format.toUpperCase()} file: ${error.message}`);
+            handleError(error, `exporting ${format.toUpperCase()} file`);
         }
     };
 
