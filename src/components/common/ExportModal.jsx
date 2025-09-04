@@ -95,7 +95,7 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
                 <div className="p-6 bg-gray-50 rounded-b-lg border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <button 
                         onClick={() => handleExport('ris')} 
-                        className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700"
+                        className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-main px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-main-dark"
                     >
                         RIS
                     </button>

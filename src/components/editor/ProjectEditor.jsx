@@ -657,8 +657,8 @@ Return ONLY the JSON object with no additional text.`;
                 const s = index + 1;
                 const canNavigate = concepts && concepts.length > 0 && concepts.some(concept => concept.keywords && concept.keywords.length > 0);
                 return (<li key={name} className={cn("relative", index !== 2 ? "pr-8 sm:pr-20" : "")}> 
-                    {step > s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-indigo-600" /></div><button disabled={!canNavigate} onClick={() => setStep(s)} className="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-900 disabled:bg-gray-400"><CheckIcon className="h-5 w-5 text-white" /></button></>) 
-                    : step === s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-indigo-600 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-indigo-600" /></span></>) 
+                    {step > s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-main" /></div><button disabled={!canNavigate} onClick={() => setStep(s)} className="relative flex h-8 w-8 items-center justify-center rounded-full bg-main hover:bg-main-dark disabled:bg-gray-400"><CheckIcon className="h-5 w-5 text-white" /></button></>) 
+                    : step === s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-main bg-white"><span className="h-2.5 w-2.5 rounded-full bg-main" /></span></>) 
                     : (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="group relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-300 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-transparent" /></span></>)}
                 </li>);
             })}

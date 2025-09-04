@@ -84,7 +84,7 @@ function Header({ title = "PreVue", subtitle = null, showNav = false, onBackButt
             {showDownloadButton && downloads && downloads.length > 0 && (
               <button
                 onClick={() => setIsOpen(true)}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-main hover:bg-main-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-main"
               >
                 <DownloadIcon className="h-4 w-4 mr-2" />
                 Downloads ({downloads.filter(d => d.status === 'completed' || d.status === 'partial').length})
@@ -115,7 +115,7 @@ function Header({ title = "PreVue", subtitle = null, showNav = false, onBackButt
                       alt={user.displayName || 'User'}
                     />
                   ) : (
-                    <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                    <div className="h-8 w-8 rounded-full bg-main flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
                         {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
                       </span>
