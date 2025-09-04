@@ -74,7 +74,7 @@ function ArticleDetailModal({ article, onClose }) {
                 </div>
                 <div className="p-6 bg-gray-50 rounded-b-lg border-t border-gray-200 flex justify-between items-center">
                     <p className="text-sm text-gray-600">DOI: {details.doi || 'N/A'}</p>
-                    <a href={details.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700">
+                    <a href={details.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark">
                         View Source Article
                     </a>
                 </div>

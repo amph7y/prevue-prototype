@@ -70,7 +70,7 @@ const PicoBuilder = ({ state, actions, showOnlyConcepts = false }) => {
                                     <button
                                         type="button"
                                         onClick={() => addConcept(type)}
-                                        className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded"
+                                        className="text-sm text-main hover:text-main-dark flex items-center gap-1 hover:bg-main/10 px-2 py-1 rounded"
                                     >
                                         <PlusCircleIcon className="h-5 w-5" /> Add Concept
                                     </button>
@@ -111,7 +111,7 @@ const PicoBuilder = ({ state, actions, showOnlyConcepts = false }) => {
                                     <button 
                                         type="button" 
                                         onClick={() => addConceptSynonym(concept.id)} 
-                                        className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded"
+                                        className="text-sm text-main hover:text-main-dark flex items-center gap-1 hover:bg-main/10 px-2 py-1 rounded"
                                     >
                                         <PlusCircleIcon className="h-5 w-5" /> Add Synonym
                                     </button>
@@ -234,7 +234,7 @@ const PicoBuilder = ({ state, actions, showOnlyConcepts = false }) => {
                         type="button"
                         onClick={handleGeneratePicoFromQuestion}
                         disabled={isLoading || !researchQuestion.trim()}
-                        className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300"
+                        className="inline-flex items-center rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"
                     >
                         {isLoading ? (
                             <>

@@ -94,7 +94,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                                  <div key={category}>
                                      <h5 className="font-medium text-gray-700 capitalize">{category}</h5>
                                      <div className="mt-2 flex flex-wrap gap-1">
-                                         {data.keywords.map((kw, i) => (<button key={`kw-${i}`} onClick={() => handleKeywordToggle(category, 'keywords', i)} className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium', kw.active ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 line-through')}>{kw.term}</button>))}
+                                         {data.keywords.map((kw, i) => (<button key={`kw-${i}`} onClick={() => handleKeywordToggle(category, 'keywords', i)} className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium', kw.active ? 'bg-main/10 text-main' : 'bg-gray-100 text-gray-600 line-through')}>{kw.term}</button>))}
                                          {data.controlled_vocabulary.map((vocab, i) => (<button key={`cv-${i}`} onClick={() => handleKeywordToggle(category, 'controlled_vocabulary', i)} className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium', vocab.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 line-through')}>{vocab.term}</button>))}
                                      </div>
                                  </div>
@@ -107,7 +107,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                             <h4 className="font-semibold text-lg text-gray-800">Updated Query Preview</h4>
                             <textarea rows={8} className="mt-2 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm font-mono" value={editedQuery} readOnly />
                              <div className="mt-2 flex justify-end">
-                                 <button onClick={handleRecalculateCount} disabled={isCounting} className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:bg-blue-300">
+                                 <button onClick={handleRecalculateCount} disabled={isCounting} className="inline-flex items-center rounded-md border border-transparent bg-main px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                                      {isCounting ? <Spinner /> : <ArrowPathIcon className="h-4 w-4 mr-1" />}
                                      Recalculate Count
                                  </button>
@@ -116,7 +116,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                     </div>
                 </div>
                 <div className="p-4 bg-gray-50 border-t flex justify-end">
-                    <button onClick={() => { onApplyChanges(newKeywords); onClose(); }} className="inline-flex items-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700">Apply Changes & Close</button>
+                    <button onClick={() => { onApplyChanges(newKeywords); onClose(); }} className="inline-flex items-center rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark">Apply Changes & Close</button>
                     <button onClick={onClose} className="ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Cancel</button>
                 </div>
             </div>
