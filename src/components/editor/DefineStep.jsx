@@ -90,7 +90,7 @@ const DefineStep = ({ state, actions }) => {
               <button 
                 type="button" 
                 onClick={() => setStep(2)} 
-                className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700"
+                className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark"
               >
                 Continue to Query
                 <ArrowUturnRightIcon className="h-5 w-5" />
@@ -115,7 +115,7 @@ const DefineStep = ({ state, actions }) => {
               type="button"
               onClick={handleGenerateConcepts}
               disabled={isLoading || !researchQuestion.trim()}
-              className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300"
+              className="inline-flex items-center rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"
             >
               {isLoading ? (
                 <>
@@ -157,7 +157,7 @@ const DefineStep = ({ state, actions }) => {
               type="button"
               onClick={handleGenerateKeywordsForConcepts}
               disabled={isGeneratingKeywords}
-              className="inline-flex items-center rounded-md border border-transparent bg-green-600 px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
+              className="inline-flex items-center rounded-md border border-transparent bg-main px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50 disabled:cursor-not-allowed"
             >
               {isGeneratingKeywords ? (
                 <>
@@ -210,7 +210,7 @@ const DefineStep = ({ state, actions }) => {
               <button
                 type="button"
                 onClick={addNegativeKeyword}
-                className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:bg-indigo-50 px-3 py-2 rounded"
+                className="text-sm text-main hover:text-main-dark flex items-center gap-1 hover:bg-main/10 px-3 py-2 rounded"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -245,7 +245,7 @@ const DefineStep = ({ state, actions }) => {
                       </div>
                     </div>
                     <div className={`ml-3 flex h-5 w-5 items-center justify-center rounded-full border ${
-                      keywordStyle === option.value ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                      keywordStyle === option.value ? 'border-main bg-main' : 'border-gray-300'
                     }`}>
                       {keywordStyle === option.value && (
                         <svg className="h-2.5 w-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -265,7 +265,7 @@ const DefineStep = ({ state, actions }) => {
               type="button"
               onClick={handleGenerateKeywordsForConcepts}
               disabled={isGeneratingKeywords}
-              className="inline-flex items-center rounded-md border border-transparent bg-green-600 px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
+              className="inline-flex items-center rounded-md border border-transparent bg-main px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50 disabled:cursor-not-allowed"
             >
               {isGeneratingKeywords ? (
                 <>
@@ -319,7 +319,7 @@ const DefineStep = ({ state, actions }) => {
           <button 
             type="button" 
             onClick={() => setStep(2)} 
-            className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700"
+            className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark"
           >
             Continue to Query
             <ArrowUturnRightIcon className="h-5 w-5" />

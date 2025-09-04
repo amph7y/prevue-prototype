@@ -149,7 +149,7 @@ const ResultsViewer = ({ state, actions }) => {
     const navButtons = (
        <div className="flex justify-between items-center">
             <button type="button" onClick={() => setStep(2)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />Back to Queries</button>
-            <button onClick={() => setIsExportModalOpen(true)} className="inline-flex items-center gap-x-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700">
+            <button onClick={() => setIsExportModalOpen(true)} className="inline-flex items-center gap-x-2 px-4 py-2 text-sm font-medium text-white bg-main border border-transparent rounded-md shadow-sm hover:bg-main-dark">
                 <DownloadIcon className="h-5 w-5" /> Export All
             </button>
         </div>
@@ -189,7 +189,7 @@ const ResultsViewer = ({ state, actions }) => {
                             <select id="pageSize" value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                                 <option>10</option><option>25</option><option>50</option><option>100</option>
                             </select>
-                            <button onClick={() => handleRunSearch(true)} className="p-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700"><RefreshIcon className="h-5 w-5"/></button>
+                            <button onClick={() => handleRunSearch(true)} className="p-2 text-white bg-main rounded-md hover:bg-main-dark"><RefreshIcon className="h-5 w-5"/></button>
                         </div>
                     </div>
                 </div>
@@ -342,7 +342,7 @@ const ResultsViewer = ({ state, actions }) => {
                                                                         disabled={loadingPage}
                                                                         className={`px-3 py-1 text-sm border rounded-md disabled:opacity-50 ${
                                                                             pageNum === currentPageNum
-                                                                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                                                                ? 'bg-main text-white border-main'
                                                                                 : 'border-gray-300 hover:bg-gray-50'
                                                                         }`}
                                                                     >

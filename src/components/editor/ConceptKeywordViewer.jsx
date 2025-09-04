@@ -107,7 +107,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                 {/* Keywords Section */}
                                 <div>
                                     <h4 className="font-medium text-gray-700 mb-3 flex items-center">
-                                        <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                        <span className="w-2 h-2 bg-main rounded-full mr-2"></span>
                                         Keywords
                                     </h4>
                                     <div className="space-y-3">
@@ -123,7 +123,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                                     className={cn(
                                                         'flex-1 text-left px-3 py-2 rounded border transition-colors',
                                                         kw.active 
-                                                            ? 'bg-white border-blue-300 text-blue-800 shadow-sm' 
+                                                            ? 'bg-white border-main shadow-sm' 
                                                             : 'bg-gray-100 border-gray-200 text-gray-500 line-through'
                                                     )}
                                                 >
