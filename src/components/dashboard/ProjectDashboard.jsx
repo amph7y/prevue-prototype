@@ -143,7 +143,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding }) {
                                 {/* Temporarily hidden: Are you interested section
                                 <div className="mt-4 flex flex-wrap gap-3 items-center">
                                     <span className="text-sm text-gray-700">Are you interested?</span>
-                                    <button onClick={() => handleGapInterest(true)} className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-indigo-100 px-3 py-1.5 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-200">Yes</button>
+                                    <button onClick={() => handleGapInterest(true)} className="inline-flex items-center gap-x-2 rounded-md border border-transparent bg-main/10 px-3 py-1.5 text-sm font-medium text-main shadow-sm hover:bg-main/20">Yes</button>
                                     <button onClick={() => handleGapInterest(false)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Not right now</button>
                                 </div>
                                 */}
@@ -167,7 +167,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding }) {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">2. Generate from Research Idea</label>
-                                    <div className="mt-1"><button onClick={() => setIsAiModalOpen(true)} disabled={isCreating} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300"><SparklesIcon className="h-5 w-5" />Generate with AI</button></div>
+                                    <div className="mt-1"><button onClick={() => setIsAiModalOpen(true)} disabled={isCreating} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"><SparklesIcon className="h-5 w-5" />Generate with AI</button></div>
                                 </div>
                             </div>
                         </div>

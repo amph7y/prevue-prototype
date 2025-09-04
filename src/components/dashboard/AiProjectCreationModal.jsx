@@ -45,7 +45,7 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
                         <label htmlFor="research-topic" className="block text-sm font-medium text-gray-700">Enter a broad research topic:</label>
                         <input type="text" id="research-topic" value={researchTopic} onChange={(e) => setResearchTopic(e.target.value)} placeholder="e.g., telehealth for chronic diseases" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled={isLoadingAI} />
                     </div>
-                    <button onClick={handleGenerate} disabled={isLoadingAI || !researchTopic.trim()} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">
+                    <button onClick={handleGenerate} disabled={isLoadingAI || !researchTopic.trim()} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                         {isLoadingAI ? <Spinner /> : <SparklesIcon className="h-5 w-5" />}
                         {isLoadingAI ? 'Generating...' : 'Generate Research Question & PICO'}
                     </button>
@@ -66,7 +66,7 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
                 </div>
                 <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
                     <button onClick={onClose} className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Cancel</button>
-                    <button onClick={handleCreate} disabled={!generatedData || isCreating} className="inline-flex items-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:bg-green-300">
+                    <button onClick={handleCreate} disabled={!generatedData || isCreating} className="inline-flex items-center rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                         {isCreating ? <Spinner /> : <FolderPlusIcon className="h-5 w-5 mr-2" />}
                         {isCreating ? 'Creating...' : 'Create Project'}
                     </button>

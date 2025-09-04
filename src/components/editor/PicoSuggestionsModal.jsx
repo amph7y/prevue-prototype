@@ -24,7 +24,7 @@ const PicoSuggestionsModal = ({ suggestionsState, onClose, onAddSuggestion }) =>
                                 <button 
                                     key={i} 
                                     onClick={() => onAddSuggestion(suggestion, suggestionsState.category)} 
-                                    className="bg-indigo-100 text-indigo-800 rounded-full px-3 py-1 text-sm font-medium hover:bg-indigo-200"
+                                    className="bg-main/10 text-main rounded-full px-3 py-1 text-sm font-medium hover:bg-main/20"
                                 >
                                     Add: "{suggestion}"
                                 </button>

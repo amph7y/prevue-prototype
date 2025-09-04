@@ -33,7 +33,7 @@ const QueryBuilder = ({ state, actions }) => {
                 Back to Define
             </button>
 
-            <button type="button" onClick={() => handleRunSearch()} disabled={isSearching} className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">
+            <button type="button" onClick={() => handleRunSearch()} disabled={isSearching} className="inline-flex items-center rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                 {isSearching ? <><Spinner /> <span className='ml-2'>Searching...</span></> : <><SearchIcon className="h-5 w-5 mr-2" /><span>Run Live Search</span></>}
             </button>
         </div>
@@ -184,7 +184,7 @@ const QueryBuilder = ({ state, actions }) => {
                                                 type="button"
                                                 onClick={() => setEnabledControlledVocabTypes(prev => ({ ...prev, mesh: !prev.mesh }))}
                                                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                                                    enabledControlledVocabTypes.mesh ? 'bg-indigo-600' : 'bg-gray-200'
+                                                    enabledControlledVocabTypes.mesh ? 'bg-main' : 'bg-gray-200'
                                                 }`}
                                                 role="switch"
                                                 aria-checked={enabledControlledVocabTypes.mesh}
