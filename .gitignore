@@ -45,3 +45,5 @@ dist-ssr
 # Environment variables
 .env
 .env.*
+
+migration-script/

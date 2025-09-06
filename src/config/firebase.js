@@ -6,15 +6,15 @@ import toast from 'react-hot-toast';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyDYeurYdntWxL-lYzX59cWVpq2yTScUPHI",
-    authDomain: "prevue-6a37a.firebaseapp.com",
-    projectId: "prevue-6a37a",
-    storageBucket: "prevue-6a37a.firebasestorage.app",
-    messagingSenderId: "782694293615",
-    appId: "1:782694293615:web:f58e2caf92c39286802d9a",
-    measurementId: "G-PWW86487BH"
-};
-  
+    apiKey: "AIzaSyC25eYX5kwBwRL6oYPVV7OGeozXEJWVJxI",
+    authDomain: "prevue-id.firebaseapp.com",
+    projectId: "prevue-id",
+    storageBucket: "prevue-id.firebasestorage.app",
+    messagingSenderId: "219132116677",
+    appId: "1:219132116677:web:cf10088594f06a84c3faac",
+    measurementId: "G-NN2GHBWBGK"
+  };
+    
 let app, auth, db, analytics;
 
 try {
