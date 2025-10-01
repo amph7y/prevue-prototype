@@ -45,7 +45,7 @@ exports.callGeminiApi = functions.https.onRequest({
         return res.status(400).json({ error: 'Prompt is required' });
       }
 
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
       
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
