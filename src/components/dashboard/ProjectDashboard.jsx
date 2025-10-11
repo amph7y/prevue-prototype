@@ -11,7 +11,7 @@ import GapFinderModal from './GapFinderModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import Header from '../common/Header.jsx';
 
-function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding }) {
+function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin }) {
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [newProjectName, setNewProjectName] = useState('');
@@ -122,7 +122,13 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding }) {
             {isAiModalOpen && <AiProjectCreationModal onClose={() => setIsAiModalOpen(false)} onCreateProject={handleCreateProject} isCreating={isCreating} />}
             {isGapFinderModalOpen && <GapFinderModal onClose={() => setIsGapFinderModalOpen(false)} />}
 
-            <Header subtitle="Dashboard" onBackButtonClicked={onBackToLanding} backButtonText="Back to Home" onLogoClick={onBackToLanding} />
+            <Header 
+                subtitle="Dashboard" 
+                onBackButtonClicked={onBackToLanding} 
+                backButtonText="Back to Home" 
+                onLogoClick={onBackToLanding}
+                onGoToAdmin={onGoToAdmin}
+            />
             
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
