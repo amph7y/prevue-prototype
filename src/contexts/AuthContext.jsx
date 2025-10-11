@@ -235,7 +235,7 @@ export const AuthProvider = ({ children }) => {
             // Send email verification
             try {
                 const actionCodeSettings = {
-                    url: window.location.origin + '/',
+                    url: 'https://prevue-testing.vercel.app/#',
                     handleCodeInApp: false
                 };
                 await sendEmailVerification(newUser, actionCodeSettings);

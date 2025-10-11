@@ -295,10 +295,9 @@ exports.createUser = functions.https.onRequest({
       });
 
       // Generate a verification link
-      const appOrigin = req.headers.origin;
-      const fallbackUrl = appOrigin && appOrigin.startsWith('http') ? `${appOrigin}/` : 'https://prevue.example.com/'; // update it with deployed url 
+      const fallbackUrl = 'https://prevue-testing.vercel.app/#';
       const actionCodeSettings = {
-        url: fallbackUrl, // update it with deployed url 
+        url: fallbackUrl,
         handleCodeInApp: false
       };
       const verificationLink = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
