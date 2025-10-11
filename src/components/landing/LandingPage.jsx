@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header.jsx';
 import { CONTACT_US_GOOGLE_FORM_CONFIG, RATE_LIMIT_CONFIG, validateContactForm } from '../../config/contactUs.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
-function LandingPage({ onGetStarted }) {
+function LandingPage({ onGetStarted,onGoToAdmin}) {
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [contactUsFeedbackMessage, setContactUsFeedbackMessage] = useState({state: 'none', message: ''});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmitTime, setLastSubmitTime] = useState(null);
-  
+  const { isAuthenticated, isAdmin } = useAuth();
+
   const workflowSectionRef = useRef(null);
   const [workflowVisible, setWorkflowVisible] = useState(false);
 
@@ -115,13 +117,24 @@ function LandingPage({ onGetStarted }) {
           onLogoClick={() => {}} // No action needed on landing page
           showNav={false}
           actionButton={
+          <div className="flex items-center gap-x-2">
+              {isAuthenticated && isAdmin && (
+                <button
+                  onClick={onGoToAdmin}
+                  className="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main"
+                >
+                  Admin Dashboard
+                </button>
+              )}
             <button
               onClick={onGetStarted}
               className="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main"
             >
               Test Prototype
             </button>
+          </div>
           }
+          onGoToAdmin={onGoToAdmin}
         />
 
         {/* Hero Section */}
