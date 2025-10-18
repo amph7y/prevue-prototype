@@ -1,4 +1,5 @@
 import { auth } from '../config/firebase.js';
+import { logApi } from './logApi.js';
 const ADMIN_API_BASE_URL = import.meta.env.VITE_ADMIN_FB_URL ;
 
 // Helper function to get auth token
@@ -64,6 +65,31 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ userId }),
     });
+  },
+
+  // Activity Logs Management
+  getActivityLogs: async (options = {}) => {
+    return logApi.getActivityLogs(options);
+  },
+
+  getBusiestHours: async (options = {}) => {
+    return logApi.getBusiestHours(options);
+  },
+
+  getBusiestDays: async (options = {}) => {
+    return logApi.getBusiestDays(options);
+  },
+
+  getActivitySummary: async (options = {}) => {
+    return logApi.getActivitySummary(options);
+  },
+
+  getUserActivitySummary: async (userId, options = {}) => {
+    return logApi.getUserActivitySummary(userId, options);
+  },
+
+  getRealTimeActivity: async () => {
+    return logApi.getRealTimeActivity();
   },
 };
 

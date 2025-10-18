@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { cn } from '../../utils/cn.js';
 import { handleError } from '../../utils/utils.js';
 import { PROJECT_COLORS } from '../../config/constants.js';
+import logger from '../../utils/logger.js';
 import { FolderPlusIcon, SearchIcon, SparklesIcon, LightBulbIcon } from '../common/Icons.jsx';
 import AiProjectCreationModal from './AiProjectCreationModal.jsx';
 import GapFinderModal from './GapFinderModal.jsx';
@@ -65,6 +66,10 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                 userEmail: user?.email || null
             };
             const docRef = await addDoc(collection(db, projectsCollectionPath), newProjectData);
+            
+            // Log project creation
+            await logger.logProjectCreate(userId, docRef.id, name);
+            
             toast.success(`Project '${name}' created!`);
             onSelectProject({ id: docRef.id, ...newProjectData });
         } catch (error) {
@@ -110,6 +115,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
         try {
             const projectRef = doc(db, `users/${userId}/projects`, projectId);
             await deleteDoc(projectRef);
+            await logger.logProjectDelete(userId, projectId, projectName);
             toast.success(`Project "${projectName}" deleted successfully!`);
         } catch (error) {
             console.error('Failed to delete project:', error);
@@ -191,7 +197,10 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                                             <div className={cn(project.color || 'bg-gray-600', "flex w-16 flex-shrink-0 items-center justify-center rounded-l-md text-sm font-medium text-white")}>{project.name.substring(0, 2).toUpperCase()}</div>
                                             <div className="flex flex-1 items-center justify-between truncate rounded-r-md border-b border-r border-t border-gray-200 bg-white">
                                                 <div className="flex-1 truncate px-4 py-2 text-sm">
-                                                    <button onClick={() => onSelectProject(project)} className="font-medium text-gray-900 hover:text-indigo-600 text-left w-full truncate">{project.name}</button>
+                                                    <button onClick={async () => {
+                                                        await logger.logProjectView(userId, project.id, project.name);
+                                                        onSelectProject(project);
+                                                    }} className="font-medium text-gray-900 hover:text-indigo-600 text-left w-full truncate">{project.name}</button>
                                                     <p className="text-gray-500">{project.createdAt?.toDate().toLocaleDateString()}</p>
                                                 </div>
                                                 <div className="flex-shrink-0 pr-2">

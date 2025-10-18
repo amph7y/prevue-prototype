@@ -1,7 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatFirestoreTimestamp } from '../../utils/dateUtils.js';
+import { adminApi } from '../../api/adminApi.js';
+import { logApi } from '../../api/logApi.js';
+import logger from '../../utils/logger.js';
 
 const AdminStats = ({ users }) => {
+  const [busiestHours, setBusiestHours] = useState([]);
+  const [busiestDays, setBusiestDays] = useState([]);
+  const [activitySummary, setActivitySummary] = useState([]);
+  const [keyActivities, setKeyActivities] = useState(null);
+  const formatHourLabel = (hour24) => {
+    const h = Number(hour24);
+    const hour = (h % 12) === 0 ? 12 : (h % 12);
+    const suffix = h < 12 ? 'AM' : 'PM';
+    return `${hour}:00 ${suffix}`;
+  };
+  const formatIntervalLabel = (hhmm) => {
+    // expects 'HH:MM'
+    const [hh, mm] = (hhmm || '').split(':');
+    const h = Number(hh);
+    const hour = (h % 12) === 0 ? 12 : (h % 12);
+    const suffix = h < 12 ? 'AM' : 'PM';
+    return `${hour}:${mm} ${suffix}`;
+  };
+  const [realTimeActivity, setRealTimeActivity] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const toDateSafe = (timestamp) => {
     if (!timestamp) return null;
 
@@ -72,6 +97,75 @@ const AdminStats = ({ users }) => {
 
   const monthlyData = getUsersByMonth();
   const maxUsers = Math.max(...monthlyData.map(m => m.users), 1);
+
+  // Load activity data
+  useEffect(() => {
+    const loadActivityData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [hoursData, daysData, summaryData, realTimeData] = await Promise.all([
+          adminApi.getBusiestHours({ days: 30 }),
+          adminApi.getBusiestDays({ weeks: 4 }),
+          adminApi.getActivitySummary({ days: 30 }),
+          adminApi.getRealTimeActivity()
+        ]);
+
+        setBusiestHours(hoursData.busiestHours || []);
+        setBusiestDays(daysData.busiestDays || []);
+        setActivitySummary(summaryData.summary || []);
+        setRealTimeActivity(realTimeData || {});
+        // Build precise Key Activities from raw logs (to use featureName details)
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 30);
+        const logsResp = await logApi.getActivityLogsByDateRange(start, end, { limitCount: 10000 });
+        const logs = logsResp.logs || [];
+        const isAdminAction = (action) => action && action.startsWith('admin_');
+        const isInitiated = (action) => action && (
+          action === 'live_search_initiated' ||
+          action === 'concept_generation_initiated' ||
+          action === 'keyword_generation_initiated' ||
+          action === 'export_initiated'
+        );
+        const safeGet = (obj, path) => {
+          try { return path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj); } catch { return undefined; }
+        };
+        const countWhere = (fn) => logs.filter(l => !isAdminAction(l.action) && !isInitiated(l.action) && fn(l)).length;
+        const byAction = (a) => (l) => l.action === a;
+        const byFeature = (name) => (l) => l.action === 'feature_used' && safeGet(l, 'details.featureName') === name;
+
+        const ka = {
+          features_used: countWhere(byAction('feature_used')),
+          projects_viewed: countWhere(byAction('project_view')),
+          projects_created: countWhere(byAction('project_create')),
+          projects_created_with_ai: countWhere(byFeature('ai_project_created')),
+          generate_ai_project: countWhere(byFeature('ai_project_generate_clicked')),
+          projects_deleted: countWhere(byAction('project_delete')),
+          generate_concepts: countWhere(byFeature('concept_generation')),
+          generate_keywords: countWhere(byFeature('keyword_generation')),
+          live_searches_performed: countWhere(byAction('search_perform')),
+          copy_query: countWhere(byFeature('copy_query')),
+          articles_viewed: countWhere(byAction('article_view')),
+          search_export: countWhere(byAction('search_export')),
+          user_logins: countWhere(byAction('user_login')),
+          user_logouts: countWhere(byAction('user_logout')),
+        };
+        setKeyActivities(ka);
+        
+        // Log admin stats view
+        //await logger.logAdminStatsView('admin', 'activity_analytics');
+      } catch (err) {
+        console.error('Error loading activity data:', err);
+        setError('Failed to load activity data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadActivityData();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -256,6 +350,217 @@ const AdminStats = ({ users }) => {
           ))}
         </div>
       </div>
+
+      {/* Activity Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Busiest Hours */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Busiest Hours (Last 30 Days)</h3>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600">
+              <p>{error}</p>
+            </div>
+          ) : busiestHours.length > 0 ? (
+            <div className="space-y-3">
+              {busiestHours.slice(0, 8).map((hour, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="w-16 text-sm text-gray-600">{hour.hourFormatted}</div>
+                  <div className="flex-1 mx-4">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${hour.percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="w-12 text-sm font-medium text-gray-900 text-right">
+                    {hour.count}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No activity data available</p>
+            </div>
+          )}
+        </div>
+
+        {/* Busiest Days */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Busiest Days (Last 4 Weeks)</h3>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600">
+              <p>{error}</p>
+            </div>
+          ) : busiestDays.length > 0 ? (
+            <div className="space-y-3">
+              {busiestDays.map((day, index) => (
+                <div key={index} className="flex items-center">
+                  <div className="w-20 text-sm text-gray-600">{day.dayName}</div>
+                  <div className="flex-1 mx-4">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-purple-500 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${day.percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="w-12 text-sm font-medium text-gray-900 text-right">
+                    {day.count}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No activity data available</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Activity Summary (Filtered) */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Key Activities (Last 30 Days)</h3>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-600">
+            <p>{error}</p>
+          </div>
+        ) : (
+          (() => {
+            if (!keyActivities) {
+              return (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No activity data available</p>
+                </div>
+              );
+            }
+
+            // KPI cards
+            const kpis = [
+              { key: 'generate_concepts', label: 'Generate Concepts' },
+              { key: 'generate_keywords', label: 'Generate Keywords' },
+              { key: 'live_searches_performed', label: 'Live Searches Performed' },
+              { key: 'search_export', label: 'Search Exports' },
+            ];
+
+            // Ordered list for full grid per user's requested items
+            const items = [
+              { key: 'features_used', label: 'Features Used' },
+              { key: 'projects_viewed', label: 'Projects Viewed' },
+              { key: 'projects_created', label: 'Projects Created' },
+              { key: 'projects_created_with_ai', label: 'Projects Created with AI' },
+              { key: 'generate_ai_project', label: 'Generate AI Project' },
+              { key: 'projects_deleted', label: 'Projects Deleted' },
+              { key: 'generate_concepts', label: 'Generate Concepts' },
+              { key: 'generate_keywords', label: 'Generate Keywords' },
+              { key: 'live_searches_performed', label: 'Live Searches Performed' },
+              { key: 'copy_query', label: 'Copy Query' },
+              { key: 'articles_viewed', label: 'Articles Viewed' },
+              { key: 'search_export', label: 'Search Export' },
+              { key: 'user_logins', label: 'User Logins' },
+              { key: 'user_logouts', label: 'User Logouts' },
+            ];
+
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {kpis.map(({ key, label }) => (
+                    <div key={key} className="rounded-lg border shadow-sm p-4 bg-gradient-to-br from-indigo-50 to-white">
+                      <div className="text-xs font-medium text-indigo-700 mb-1">{label}</div>
+                      <div className="text-3xl font-bold text-indigo-900">{(keyActivities[key] || 0).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {items.map(({ key, label }) => (
+                    <div key={key} className="bg-gray-50 p-4 rounded-lg border">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-gray-700">{label}</h4>
+                        <span className="text-lg font-bold text-gray-900">{(keyActivities[key] || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-indigo-500 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${Math.min(((keyActivities[key] || 0) / Math.max(...Object.values(keyActivities || { a: 1 }))) * 100, 100)}%` }}
+                          title={`${(keyActivities[key] || 0).toLocaleString()} events`}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()
+        )}
+      </div>
+
+      {/* Real-time Activity */}
+      {realTimeActivity.intervalActivity && Object.keys(realTimeActivity.intervalActivity).length > 0 && (() => {
+        const entries = Object.entries(realTimeActivity.intervalActivity).sort(([a], [b]) => a.localeCompare(b));
+        const counts = entries.map(([, c]) => c);
+        const total = counts.reduce((s, n) => s + n, 0);
+        const peak = Math.max(...counts);
+        const peakIdx = counts.indexOf(peak);
+        const peakInterval = entries[peakIdx]?.[0];
+        const avg = counts.length > 0 ? (total / counts.length) : 0;
+        const maxBar = Math.max(peak, 1);
+        const colorFor = (pct) => pct > 0.75 ? 'from-rose-500 to-orange-500' : pct > 0.5 ? 'from-orange-400 to-amber-400' : pct > 0.25 ? 'from-amber-300 to-yellow-300' : 'from-teal-300 to-cyan-300';
+        return (
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Real-time Activity (Last Hour)</h3>
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1 rounded-full text-xs bg-indigo-50 text-indigo-700 border border-indigo-100">Total: <span className="font-semibold">{total}</span></div>
+                <div className="px-3 py-1 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-100">Peak: <span className="font-semibold">{peak}</span> @ {formatIntervalLabel(peakInterval)}</div>
+                <div className="px-3 py-1 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-100">Avg/slot: <span className="font-semibold">{avg.toFixed(1)}</span></div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-12 gap-2 items-end">
+              {entries.map(([interval, count], idx) => {
+                const pct = count / maxBar;
+                const gradient = colorFor(pct);
+                const showLabel = true; 
+                return (
+                  <div key={interval} className="flex flex-col items-center">
+                    <div 
+                      className={`w-full h-20 bg-gradient-to-t ${gradient} rounded-md shadow-sm transition-all duration-300`} 
+                      style={{ height: `${Math.max(8, pct * 80)}px` }}
+                      title={`${interval} — ${count} activities`}
+                    ></div>
+                    <div className="text-[10px] text-gray-500 mt-1 leading-tight text-center whitespace-nowrap">
+                      {showLabel ? formatIntervalLabel(interval) : '\u00A0'}
+                    </div>
+                    <div className="text-[10px] text-gray-400">{count}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center gap-4 text-xs text-gray-600">
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-t from-rose-500 to-orange-500 inline-block"></span> High</div>
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-t from-orange-400 to-amber-400 inline-block"></span> Med‑High</div>
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-t from-amber-300 to-yellow-300 inline-block"></span> Medium</div>
+              <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-t from-teal-300 to-cyan-300 inline-block"></span> Low</div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -3,6 +3,7 @@ import PicoBuilder from './PicoBuilder.jsx';
 import ConceptKeywordViewer from './ConceptKeywordViewer.jsx';
 import { ArrowUturnLeftIcon, ArrowUturnRightIcon, MainSparklesIcon, PencilIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
+import logger from '../../utils/logger.js';
 
 const DefineStep = ({ state, actions }) => {
   const { researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle } = state;
@@ -28,12 +29,21 @@ const DefineStep = ({ state, actions }) => {
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
 
   const handleGenerateConcepts = async () => {
+    // Log concept generation initiation
+    await logger.logConceptGenerationInitiated(null, {
+      researchQuestion: researchQuestion.substring(0, 100)
+    });
     await handleGeneratePicoFromQuestion();
   };
 
   const handleGenerateKeywordsForConcepts = async () => {
     setIsGeneratingKeywords(true);
     try {
+      // Log keyword generation initiation
+      await logger.logKeywordGenerationInitiated(null, {
+        conceptsCount: concepts.length,
+        keywordStyle
+      });
       await handleGenerateKeywords(concepts, keywordStyle);
       // Scroll to the Keyword Generation Style section after keywords are generated
       setTimeout(() => {

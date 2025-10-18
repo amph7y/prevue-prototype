@@ -304,8 +304,19 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                 cappedTotalRecords += Math.min(dbTotal, EXPORT_CAPS[dbKey] || dbTotal);
             }
             
+            const quotaPercent = typeof download.options?.exportQuotaPercent === 'number' ? download.options.exportQuotaPercent : 0.5; // Default to 50% for free users
+            const globalTarget = Math.floor(totalRecords * quotaPercent);
+            
+            let expectedRecords;
+            if (download.options?.exportFullDataset) {
+                // Full dataset mode: ignore database caps, just apply quota
+                expectedRecords = globalTarget;
+            } else {
+                // Capped mode: apply both quota and database caps
+                expectedRecords = Math.min(globalTarget, cappedTotalRecords);
+            }
             updateDownload(download.id, { 
-                totalRecords: cappedTotalRecords, 
+                totalRecords: expectedRecords, 
                 originalTotalRecords: totalRecords,
                 progress: 10 
             });
@@ -314,7 +325,18 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             
             const fileBlob = await generateExportFile(format, allArticles, options);
             
-            const expectedTotal = download.totalRecords || totalRecords;
+            const expectedTotal = download.totalRecords || (() => {
+                const quotaPercent = typeof download.options?.exportQuotaPercent === 'number' ? download.options.exportQuotaPercent : 0.5;
+                const globalTarget = Math.floor(totalRecords * quotaPercent);
+                
+                if (download.options?.exportFullDataset) {
+                    // Full dataset mode: ignore database caps, just apply quota
+                    return globalTarget;
+                } else {
+                    // Capped mode: apply both quota and database caps
+                    return Math.min(globalTarget, cappedTotalRecords);
+                }
+            })();
             const actualTotal = allArticles.length;
             const isComplete = actualTotal >= expectedTotal;
             
@@ -363,6 +385,52 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
     const fetchAllArticles = async (download, totalRecords) => {
         const { queries, searchTotals, options } = download;
         const allArticles = [];
+        const seenIds = new Set(); // Track unique IDs to prevent duplicates
+        const globalQuotaPercent = typeof options?.exportQuotaPercent === 'number' ? options.exportQuotaPercent : 0.5; // Default to 50% for free users
+        
+        // Use the same database filtering logic as processBackgroundDownload
+        const databasesToExport = options.selectedDBs && options.selectedDBs.length > 0 
+            ? options.selectedDBs 
+            : Object.keys(queries).filter(dbKey => queries[dbKey]);
+        
+        // Calculate the same capped total as in processBackgroundDownload
+        let cappedTotalRecords = 0;
+        let totalAvailableRecords = 0;
+        for (const dbKey of databasesToExport) {
+            const dbTotal = Number(searchTotals?.[dbKey] || 0);
+            totalAvailableRecords += dbTotal;
+            cappedTotalRecords += Math.min(dbTotal, EXPORT_CAPS[dbKey] || dbTotal);
+        }
+        
+        // For free users: 50% of total records, with different cap handling
+        // For premium users: 100% of total records, with different cap handling
+        const baseTotalForQuota = totalAvailableRecords; // Always use total records for quota calculation
+        const globalTarget = Math.floor(baseTotalForQuota * globalQuotaPercent);
+        
+        // Apply caps differently based on export mode and user type
+        let finalTarget;
+        if (options?.exportFullDataset) {
+            // Full dataset mode: ignore database caps, just apply quota
+            finalTarget = globalTarget;
+        } else {
+            // Capped mode: apply both quota and database caps
+            finalTarget = Math.min(globalTarget, cappedTotalRecords);
+        }
+        
+        console.log('🔍 QUOTA DEBUG:', {
+            exportQuotaPercent: options?.exportQuotaPercent,
+            globalQuotaPercent,
+            exportFullDataset: options?.exportFullDataset,
+            totalAvailableRecords,
+            cappedTotalRecords,
+            baseTotalForQuota,
+            globalTarget,
+            finalTarget,
+            searchTotals,
+            databasesToExport,
+            isFreeUser: globalQuotaPercent < 1,
+            mode: options?.exportFullDataset ? 'full_dataset' : 'capped'
+        });
 
         // Per-database batch sizes (optimized for each API's rate limits)
         const getBatchSize = (dbKey) => {
@@ -378,9 +446,56 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             }
         };
         
-        const databasesToExport = options.selectedDBs && options.selectedDBs.length > 0 
-            ? options.selectedDBs 
-            : Object.keys(queries).filter(dbKey => queries[dbKey]);
+        // Calculate per-database targets based on final target (quota + caps)
+        const dbTargets = {};
+        let remainingTarget = finalTarget;
+        
+        // First pass: allocate targets proportionally based on total records
+        databasesToExport.forEach(dbKey => {
+            const totalCount = Number(searchTotals?.[dbKey] || 0);
+            if (totalCount === 0) {
+                dbTargets[dbKey] = 0;
+                return;
+            }
+            
+            const exportCap = EXPORT_CAPS[dbKey] || totalCount;
+            const proportion = totalCount / baseTotalForQuota; // Use total records for proportion
+            const allocatedTarget = Math.floor(finalTarget * proportion);
+            
+            // Apply database cap differently based on mode
+            if (options?.exportFullDataset) {
+                // Full dataset mode: no database caps applied
+                dbTargets[dbKey] = allocatedTarget;
+            } else {
+                // Capped mode: apply database cap as ceiling
+                dbTargets[dbKey] = Math.min(allocatedTarget, exportCap);
+            }
+        });
+        
+        // Second pass: distribute any remaining quota
+        const totalAllocated = Object.values(dbTargets).reduce((sum, target) => sum + target, 0);
+        if (totalAllocated < finalTarget) {
+            const remaining = finalTarget - totalAllocated;
+            databasesToExport.forEach(dbKey => {
+                const totalCount = Number(searchTotals?.[dbKey] || 0);
+                if (totalCount === 0) return;
+                
+                const exportCap = EXPORT_CAPS[dbKey] || totalCount;
+                
+                // Apply database cap differently based on mode
+                if (options?.exportFullDataset) {
+                    // Full dataset mode: no database caps applied
+                    const canAdd = Math.min(remaining, totalCount - dbTargets[dbKey]);
+                    dbTargets[dbKey] += canAdd;
+                } else {
+                    // Capped mode: apply database cap as ceiling
+                    const canAdd = Math.min(remaining, exportCap - dbTargets[dbKey]);
+                    dbTargets[dbKey] += canAdd;
+                }
+            });
+        }
+        
+        console.log(`Final target: ${finalTarget} (quota: ${globalTarget}, mode: ${options?.exportFullDataset ? 'full_dataset' : 'capped'}), DB targets:`, dbTargets);
         
         // Create all database tasks upfront
         const databaseTasks = databasesToExport.map(async (dbKey) => {
@@ -390,22 +505,29 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             const totalCount = searchTotals?.[dbKey] || 0;
             if (totalCount === 0) return [];
             
-            const exportCap = EXPORT_CAPS[dbKey] || totalCount;
-            const cappedCount = Math.min(totalCount, exportCap);
+            const dbTarget = dbTargets[dbKey];
             const batchSize = getBatchSize(dbKey);
             
-            console.log(`Starting parallel fetch for ${dbKey}: ${cappedCount} records in batches of ${batchSize}`);
+            console.log(`Starting fetch for ${dbKey}: target ${dbTarget} records in batches of ${batchSize}`);
             
             const dbArticles = [];
             let dbProcessedRecords = 0;
             
             // Process batches for this database
-            for (let offset = 0; offset < cappedCount; offset += batchSize) {
-                const currentBatchSize = Math.min(batchSize, cappedCount - offset);
+            let offset = 0;
+            while (dbProcessedRecords < dbTarget) {
+                const remainingForDb = dbTarget - dbProcessedRecords;
+                const currentBatchSize = Math.min(batchSize, remainingForDb);
+                
+                // If no more records needed, stop
+                if (currentBatchSize <= 0 || dbProcessedRecords >= dbTarget) {
+                    console.log(`🛑 ${dbKey}: No more records needed (processed: ${dbProcessedRecords}, target: ${dbTarget}), stopping fetch`);
+                    break;
+                }
                 
                 try {
                     const response = await retryAsync(async () => {
-                        console.log(`Fetching ${dbKey} batch: offset ${offset}, size ${currentBatchSize}`);
+                        console.log(`🔍 API CALL: ${dbKey} - offset: ${offset}, size: ${currentBatchSize}, target: ${dbTarget}, processed: ${dbProcessedRecords}`);
                         
                         if (dbKey === 'pubmed') {
                             return await searchPubmed(query, currentBatchSize, offset);
@@ -422,6 +544,8 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     });
                     
                     const articles = response.data || response;
+                    console.log(`📥 API RESPONSE: ${dbKey} - requested: ${currentBatchSize}, received: ${articles?.length || 0}`);
+                    
                     if (articles && articles.length > 0) {
                         const processedArticles = articles.map(article => ({
                             ...article,
@@ -429,11 +553,34 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                             uniqueId: `${dbKey}_${article.uid || article.id || Math.random().toString(36).substr(2, 9)}`
                         }));
                         
-                        dbArticles.push(...processedArticles);
-                        dbProcessedRecords += articles.length;
+                        // Only add articles that haven't been seen before
+                        const newArticles = processedArticles.filter(article => {
+                            const id = article.uniqueId || `${dbKey}_${article.uid || article.id}`;
+                            if (seenIds.has(id)) {
+                                return false; // Skip duplicate
+                            }
+                            seenIds.add(id);
+                            return true;
+                        });
                         
+                        dbArticles.push(...newArticles);
+                        dbProcessedRecords += newArticles.length;
                         
-                        console.log(`✅ ${dbKey}: ${articles.length} articles (${dbProcessedRecords}/${cappedCount})`);
+                        console.log(`✅ ${dbKey}: ${newArticles.length} new articles (${dbProcessedRecords}/${dbTarget})`);
+                        
+                        // Check if we've exceeded our target and trim if necessary
+                        if (dbProcessedRecords > dbTarget) {
+                            const excess = dbProcessedRecords - dbTarget;
+                            console.log(`⚠️ ${dbKey}: Exceeded target by ${excess} articles, trimming`);
+                            dbArticles.splice(-excess);
+                            dbProcessedRecords = dbTarget;
+                        }
+                        
+                        // If we've reached our target, stop fetching immediately
+                        if (dbProcessedRecords >= dbTarget) {
+                            console.log(`🛑 ${dbKey}: Reached target ${dbTarget} after processing batch, stopping fetch`);
+                            break;
+                        }
                     }
                     
                     // Rate limiting delay per database
@@ -443,6 +590,7 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     console.error(`❌ ${dbKey} failed at offset ${offset}:`, error.message);
                     break;
                 }
+                offset += currentBatchSize;
             }
             
             console.log(`🏁 ${dbKey} completed: ${dbArticles.length} articles`);
@@ -468,15 +616,25 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             }
         });
         
+        // Final check: ensure we don't exceed the final target (quota + caps)
+        if (allArticles.length > finalTarget) {
+            console.log(`🛑 Final target exceeded: ${allArticles.length} > ${finalTarget}, trimming to target`);
+            allArticles.splice(finalTarget);
+            totalProcessed = allArticles.length;
+        }
+        
+        // Calculate progress based on final target (quota + caps)
+        const progressPercent = finalTarget > 0 ? Math.min(90, Math.floor((totalProcessed / finalTarget) * 90)) : 90;
         updateDownload(download.id, { 
             processedRecords: totalProcessed, 
-            progress: 90 
+            progress: progressPercent 
         });
         
         if (failedDatabases.length > 0) {
             console.log(`⚠️ Some databases failed: ${failedDatabases.join(', ')}. Continuing with ${allArticles.length} articles.`);
         }
         
+        console.log(`Final result: ${allArticles.length} articles (target was ${finalTarget})`);
         return allArticles;
     };
 

@@ -13,6 +13,7 @@ import { auth, db } from '../config/firebase.js';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { handleError } from '../utils/utils.js';
+import logger from '../utils/logger.js';
 
 const AuthContext = createContext();
 
@@ -50,6 +51,13 @@ export const AuthProvider = ({ children }) => {
             }
 
             setUser(user);
+            
+            // Set current user ID for logging
+            if (user) {
+                logger.setCurrentUserId(user.uid);
+            } else {
+                logger.clearCurrentUserId();
+            }
             
             if (user && db) {
                 // Load user profile from Firestore
@@ -144,6 +152,9 @@ export const AuthProvider = ({ children }) => {
             }
             }
 
+            // Log successful login
+            await logger.logUserLogin(user.uid, 'google');
+
             toast.success(`Welcome, ${user.displayName || user.email}!`);
             return { success: true, user };
         } catch (error) {
@@ -212,6 +223,10 @@ export const AuthProvider = ({ children }) => {
                     console.warn('Could not ensure full user profile on sign-in:', e);
                 }
             }
+            
+            // Log successful login
+            await logger.logUserLogin(signedInUser.uid, 'email');
+            
             toast.success(`Welcome, ${signedInUser.displayName || signedInUser.email}!`);
             return { success: true, user: signedInUser };
         } catch (error) {
@@ -262,6 +277,10 @@ export const AuthProvider = ({ children }) => {
                     console.warn('Skipping Firestore profile create (likely rules):', e?.message || e);
                 }
             }
+            
+            // Log user registration
+            await logger.logUserRegister(newUser.uid, 'email');
+            
             // Sign out to prevent using the account before verification
             try {
                 await signOut(auth);
@@ -282,6 +301,11 @@ export const AuthProvider = ({ children }) => {
         try {
             if (!auth) {
                 throw new Error('Firebase Auth is not initialized');
+            }
+            
+            // Log logout before signing out
+            if (user) {
+                await logger.logUserLogout(user.uid);
             }
             
             await signOut(auth);

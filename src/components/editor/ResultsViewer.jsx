@@ -3,10 +3,16 @@ import { cn } from '../../utils/cn.js';
 import { DB_CONFIG } from '../../config/dbConfig.js';
 import { DownloadIcon, ArrowPathIcon as RefreshIcon, ChevronDownIcon, ChevronUpIcon, ArrowUturnLeftIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
+import logger from '../../utils/logger.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { getCapabilities } from '../../config/accessControl.js';
 
 const ResultsViewer = ({ state, actions }) => {
     const { searchResults, initialArticles, deduplicationResult, pageSize, isSearching, searchTotals } = state;
     const { setStep, setSelectedArticle, setIsExportModalOpen, setPageSize, handleRunSearch, handleDeduplicate, handlePaginatedSearch } = actions;
+
+    const { userAccessLevel } = useAuth();
+    const capabilities = getCapabilities(userAccessLevel);
 
     const [activeTab, setActiveTab] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -215,9 +221,11 @@ const ResultsViewer = ({ state, actions }) => {
                                             )}
                                         >
                                             {DB_CONFIG[dbKey]?.name || dbKey}
-                                            <span className="bg-gray-100 text-gray-600 py-1 px-2 rounded-full text-xs">
-                                                {totalCount.toLocaleString()}
-                                            </span>
+                                           {capabilities.canSeeLiveCounts && (
+                                                <span className="bg-gray-100 text-gray-600 py-1 px-2 rounded-full text-xs">
+                                                    {totalCount.toLocaleString()}
+                                                </span>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -230,9 +238,11 @@ const ResultsViewer = ({ state, actions }) => {
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="text-md font-medium">
                                         {DB_CONFIG[activeTab]?.name || activeTab} Results
-                                        <span className="ml-2 text-sm text-gray-500">
-                                            (Page {getCurrentPage()} of {getTotalPagesForTab(activeTab)} • {getTotalItemsForTab(activeTab)} articles)
-                                        </span>
+                                        {capabilities.canSeeLiveCounts && (
+                                            <span className="ml-2 text-sm text-gray-500">
+                                                (Page {getCurrentPage()} of {getTotalPagesForTab(activeTab)} • {getTotalItemsForTab(activeTab)} articles)
+                                            </span>
+                                        )}
                                     </h4>
                                 </div>
 
@@ -264,7 +274,10 @@ const ResultsViewer = ({ state, actions }) => {
                                                     <tr key={article.uniqueId}>
                                                         <td className="px-6 py-4 text-sm">
                                                             <button 
-                                                                onClick={() => setSelectedArticle(article)} 
+                                                                onClick={async () => {
+                                                                    await logger.logArticleView(null, article.uniqueId || article.id || article.doi || 'unknown', (article.title || '').substring(0, 150));
+                                                                    setSelectedArticle(article);
+                                                                }} 
                                                                 className="font-medium text-indigo-600 hover:underline text-left block w-full"
                                                                 title={article.title || 'No Title Available'}
                                                             >
@@ -300,9 +313,13 @@ const ResultsViewer = ({ state, actions }) => {
                                             <div className="p-4 border-t">
                                                 <div className="flex items-center justify-between">
                                                     <div className="text-sm text-gray-700">
-                                                        Showing {((getCurrentPage() - 1) * pageSize) + 1} to{' '}
-                                                        {Math.min(getCurrentPage() * pageSize, getTotalItemsForTab(activeTab))} of{' '}
-                                                        {getTotalItemsForTab(activeTab)} results
+                                                        {capabilities.canSeeLiveCounts && (
+                                                            <>
+                                                                Showing {((getCurrentPage() - 1) * pageSize) + 1} to{' '}
+                                                                {Math.min(getCurrentPage() * pageSize, getTotalItemsForTab(activeTab))} of{' '}
+                                                                {getTotalItemsForTab(activeTab)} results
+                                                            </>
+                                                        )}
                                                     </div>
                                                     <div className="flex items-center space-x-2">
                                                         <button

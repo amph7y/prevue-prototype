@@ -31,8 +31,13 @@ import DefineStep from './DefineStep.jsx';
 import { retryAsync } from '../../utils/utils.js';
 import { useGlobalDownload } from '../../contexts/GlobalDownloadContext.jsx';
 import { generateExportFile, downloadBlob, generateExportFilename } from '../../utils/exportUtils.js';
+import logger from '../../utils/logger.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { getCapabilities } from '../../config/accessControl.js';
 
 function ProjectEditor({ project, onBackToDashboard, userId }) {
+    const { userAccessLevel } = useAuth();
+    const capabilities = getCapabilities(userAccessLevel);
     // Global Download Context
     const { addDownload, setIsOpen: setDownloadCenterOpen } = useGlobalDownload();
     
@@ -55,7 +60,19 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-    const [selectedDBs, setSelectedDBs] = useState({ pubmed: true, scopus: true, embase: false, core: true });
+    const [selectedDBs, setSelectedDBs] = useState(() => {
+        // Implemented DBs
+        const implemented = ['pubmed', 'scopus', 'core'];
+        const initial = { pubmed: false, scopus: false, embase: false, core: false };
+        if (capabilities.maxDatabases === Infinity) {
+            // Premium: select all implemented by default
+            implemented.forEach(k => { initial[k] = true; });
+            return initial;
+        }
+        // Free: select first two implemented by default
+        implemented.slice(0, Math.max(0, Math.min(2, capabilities.maxDatabases || 0))).forEach(k => { initial[k] = true; });
+        return initial;
+    });
     const [retmax, setRetmax] = useState(25);
     const [enabledControlledVocabTypes, setEnabledControlledVocabTypes] = useState({ mesh: true });
 
@@ -206,6 +223,14 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             }
                         
             setConcepts(generatedConcepts);
+            
+            // Log concept generation
+            await logger.logFeatureUsed(userId, 'concept_generation', {
+                projectId: project.id,
+                projectName: project.name,
+                conceptsCount: generatedConcepts.length,
+                researchQuestion: researchQuestion.substring(0, 100)
+            });
                         
             toast.success("Concepts generated from your research question!");
         } catch (err) {
@@ -321,6 +346,15 @@ Return ONLY the JSON object with no additional text.`;
             });
             
             setConcepts(updatedConcepts);
+            
+            // Log keyword generation
+            await logger.logFeatureUsed(userId, 'keyword_generation', {
+                projectId: project.id,
+                projectName: project.name,
+                keywordStyle,
+                conceptsCount: conceptsData.length,
+                totalKeywords: updatedConcepts.reduce((sum, concept) => sum + concept.keywords.length, 0)
+            });
                         
             toast.success(`Keywords generated with ${keywordStyle} style!`);
             
@@ -522,6 +556,15 @@ Return ONLY the JSON object with no additional text.`;
         setInitialArticles(allFetchedArticles);
         setSearchTotals(totals); // Store the totals from search results
         setIsSearching(false);
+        
+        // Log search execution
+        const successfulSearches = Object.values(results).filter(r => r.status === 'success').length;
+        await logger.logSearchPerform(
+            userId,
+            currentQueries, // full queries by DB
+            totals,         // per-DB counts
+            keys.join(',')  // search type: comma-separated DBs
+        );
     
         if (!isUpdate) {
             const anyFailure = Object.values(results).some(r => r.status === 'error');
@@ -587,68 +630,29 @@ Return ONLY the JSON object with no additional text.`;
 
     const exportHandler = async (format, options) => {
         console.log('Export handler called with:', format, options);
+        console.log('🔍 PROJECT EDITOR DEBUG:', {
+            userAccessLevel,
+            capabilities,
+            exportQuotaPercent: options?.exportQuotaPercent,
+            exportFullDataset: options?.exportFullDataset
+        });
         
-        // Check if user wants full dataset export
-        if (options.exportFullDataset) {
-            console.log('Starting global background export...');
-            
-            // Use global download context
-            const downloadName = generateExportFilename(project.name, format);
-            addDownload({
-                name: downloadName,
-                format,
-                options,
-                queries,
-                searchTotals,
-                progress: 0,
-                totalRecords: 0,
-                processedRecords: 0
-            });
-            
-            // Open download center automatically
-            setDownloadCenterOpen(true);
-            
-            toast.success('Export started! Check download center for progress.');
-            return; // Exit early, user will get file from download center
-        }
-        
-        // Handle immediate export for visible articles
-        let itemsToExport = [...initialArticles];
-        
-        // Filter by selected databases
-        if (options.selectedDBs && options.selectedDBs.length > 0) {
-            itemsToExport = itemsToExport.filter(item => options.selectedDBs.includes(item.sourceDB));
-        }
-        
-        if (options.includeDuplicates && deduplicationResult) {
-            itemsToExport = itemsToExport.filter(item => !item.isDuplicate);
-        }
-        
-        console.log(`Exporting ${itemsToExport.length} articles from ${initialArticles.length} total`);
-        if (itemsToExport.length === 0) return toast.error('No articles to export with selected options.');
-        
-        try {
-            // Use centralized export utilities
-            const blob = generateExportFile(format, itemsToExport, { title: project.name });
-            const filename = generateExportFilename(project.name, format);
-            
-            if (format === 'printable') {
-                // For printable format, open in new window instead of downloading
-                const url = URL.createObjectURL(blob);
-                const reportWindow = window.open(url, '_blank');
-                reportWindow.focus();
-                // Clean up URL after a delay to allow the page to load
-                setTimeout(() => URL.revokeObjectURL(url), 5000);
-            } else {
-                // Download the file
-                downloadBlob(blob, filename);
-            }
-            
-            toast.success(`Exported ${itemsToExport.length} articles.`);
-        } catch (error) {
-            console.error('Export error:', error);
-            handleError(error, `exporting ${format.toUpperCase()} file`);
-        }
+        // Always use background export (capped or full), so we can fetch beyond visible page
+        console.log('Starting background export...');
+        const downloadName = generateExportFilename(project.name, format);
+        addDownload({
+            name: downloadName,
+            format,
+            options,
+            queries,
+            searchTotals,
+            progress: 0,
+            totalRecords: 0,
+            processedRecords: 0
+        });
+        setDownloadCenterOpen(true);
+        toast.success('Export started! Check download center for progress.');
+        return;
     };
 
     const renderStepIndicator = () => (
