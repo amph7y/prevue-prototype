@@ -8,6 +8,8 @@ import { XCircleIcon, SparklesIcon, ArrowPathIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
 import { cn } from '../../utils/cn.js';
 import { getCoreCount } from '../../api/coreApi.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { getCapabilities } from '../../config/accessControl.js';
 
 const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
     const [editedQuery, setEditedQuery] = useState('');
@@ -16,6 +18,9 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [tempCount, setTempCount] = useState(null);
     const [isCounting, setIsCounting] = useState(false);
+
+	const { userAccessLevel } = useAuth();
+	const capabilities = getCapabilities(userAccessLevel);
 
     // This effect resets the modal's internal state whenever it's opened with new data
     useEffect(() => {
@@ -57,7 +62,11 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
         setNewKeywords(updatedKeywords);
     };
 
-    const handleRecalculateCount = async () => {
+	const handleRecalculateCount = async () => {
+		if (!capabilities.canSeeLiveCounts) {
+			toast.error('Upgrade to see live counts.');
+			return;
+		}
         setIsCounting(true);
         try {
             let count = 'N/A';
@@ -83,7 +92,11 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                         <h3 className="text-xl font-bold text-gray-900">Refine Query for {DB_CONFIG[modalData.dbKey].name}</h3>
                         <button onClick={onClose}><XCircleIcon className="h-6 w-6 text-gray-400 hover:text-gray-600" /></button>
                     </div>
-                    <p className="mt-2 text-sm text-gray-600">Current estimated count: <span className="font-semibold">{isCounting ? '...' : (tempCount !== undefined ? Number(tempCount).toLocaleString() : 'N/A')}</span></p>
+					<p className="mt-2 text-sm text-gray-600">Current estimated count: {capabilities.canSeeLiveCounts ? (
+						<span className="font-semibold">{isCounting ? '...' : (tempCount !== undefined ? Number(tempCount).toLocaleString() : 'N/A')}</span>
+					) : (
+						<span className="text-gray-500 font-medium">Upgrade to see live counts</span>
+					)}</p>
                 </div>
                 <div className="p-6 overflow-y-auto flex-1 grid grid-cols-2 gap-6">
                     {/* Left Side: Keyword Toggles */}
@@ -107,9 +120,9 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                             <h4 className="font-semibold text-lg text-gray-800">Updated Query Preview</h4>
                             <textarea rows={8} className="mt-2 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm font-mono" value={editedQuery} readOnly />
                              <div className="mt-2 flex justify-end">
-                                 <button onClick={handleRecalculateCount} disabled={isCounting} className="inline-flex items-center rounded-md border border-transparent bg-main px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
+								<button onClick={handleRecalculateCount} disabled={isCounting || !capabilities.canSeeLiveCounts} className="inline-flex items-center rounded-md border border-transparent bg-main px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50" title={!capabilities.canSeeLiveCounts ? 'Upgrade to unlock live counts' : undefined}>
                                      {isCounting ? <Spinner /> : <ArrowPathIcon className="h-4 w-4 mr-1" />}
-                                     Recalculate Count
+									Recalculate Count
                                  </button>
                              </div>
                          </div>

@@ -6,6 +6,7 @@ import AdminStats from './AdminStats.jsx';
 import Spinner from '../common/Spinner.jsx';
 import toast from 'react-hot-toast';
 import Header from '../common/Header.jsx';
+import logger from '../../utils/logger.js';
 
 const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
   const { user } = useAuth();
@@ -24,6 +25,9 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
       const response = await adminApi.getUsers();
       setUsers(response.users || []);
       setError(null);
+      
+      // Log admin stats view
+      //await logger.logAdminStatsView(user?.uid, 'user_management');
     } catch (error) {
       console.error('Error loading users:', error);
       setError(error.message);
@@ -36,6 +40,20 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
   const handleUserUpdate = async (userId, updateData) => {
     try {
       await adminApi.updateUserAccess(userId, updateData);
+      
+      // Log admin user update
+      const existing = users.find(u => u.id === userId) || {};
+      const changedOnly = Object.keys(updateData || {}).reduce((acc, key) => {
+        const newVal = updateData[key];
+        if (typeof newVal !== 'undefined' && existing[key] !== newVal) {
+          acc[key] = newVal;
+        }
+        return acc;
+      }, {});
+      if (Object.keys(changedOnly).length > 0) {
+        await logger.logAdminUserUpdate(user?.uid, userId, changedOnly);
+      }
+      
       toast.success('User updated successfully');
       loadUsers(); 
     } catch (error) {
@@ -47,9 +65,13 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
   const handleUserCreate = async (userData) => {
     try {
       const response = await adminApi.createUser(userData);
+      
+      // Log admin user creation
+      await logger.logAdminUserCreate(user?.uid, response?.user?.id || 'unknown', userData);
+      
       const message = response?.message || 'User created successfully';
       toast.success(message);
-      loadUsers(); 
+      loadUsers();
     } catch (error) {
       console.error('Error creating user:', error);
       toast.error('Failed to create user: ' + error.message);
@@ -58,7 +80,14 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
 
   const handleUserDelete = async (userId) => {
     try {
+      // Get user data before deletion for logging
+      const userToDelete = users.find(u => u.id === userId);
+      
       await adminApi.deleteUser(userId);
+      
+      // Log admin user deletion
+      await logger.logAdminUserDelete(user?.uid, userId, userToDelete || {});
+      
       toast.success('User deleted successfully');
       loadUsers(); 
     } catch (error) {

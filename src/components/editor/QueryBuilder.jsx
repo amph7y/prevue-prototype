@@ -5,10 +5,15 @@ import { ArrowUturnLeftIcon, SearchIcon, ClipboardIcon, PlusCircleIcon, MinusCir
 import Spinner from '../common/Spinner.jsx';
 import { cn } from '../../utils/cn.js';
 import toast from 'react-hot-toast';
+import logger from '../../utils/logger.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { getCapabilities } from '../../config/accessControl.js';
 
-const ALLOWED_DBS = ['pubmed', 'scopus', 'core'];
+const DISABLED_DBS = ['semanticScholar', 'googleScholar', 'embase'];
 
 const QueryBuilder = ({ state, actions }) => {
+    const { userAccessLevel } = useAuth();
+    const capabilities = getCapabilities(userAccessLevel);
     const { queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes } = state;
     const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes } = actions;
 
@@ -33,7 +38,14 @@ const QueryBuilder = ({ state, actions }) => {
                 Back to Define
             </button>
 
-            <button type="button" onClick={() => handleRunSearch()} disabled={isSearching} className="inline-flex items-center rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
+            <button type="button" onClick={async () => {
+                // Log search initiation
+                await logger.logLiveSearchInitiated(null, {
+                    selectedDatabases: Object.keys(selectedDBs).filter(key => selectedDBs[key]),
+                    conceptsCount: concepts.length
+                });
+                handleRunSearch();
+            }} disabled={isSearching} className="inline-flex items-center rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                 {isSearching ? <><Spinner /> <span className='ml-2'>Searching...</span></> : <><SearchIcon className="h-5 w-5 mr-2" /><span>Run Live Search</span></>}
             </button>
         </div>
@@ -50,7 +62,11 @@ const QueryBuilder = ({ state, actions }) => {
                     <h3 className="text-lg font-semibold text-gray-800">Select Databases</h3>
                     <fieldset className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                         {Object.entries(DB_CONFIG).map(([key, { name }]) => {
-                            const isAllowed = ALLOWED_DBS.includes(key);
+                            const isImplemented = !DISABLED_DBS.includes(key);
+                            const isAllowed = isImplemented; // all implemented DBs are selectable; free is limited by count below
+                            const currentSelectedCount = Object.values(selectedDBs || {}).filter(Boolean).length;
+                            const reachedLimit = currentSelectedCount >= (capabilities.maxDatabases || Infinity);
+                            const disableCheckbox = !isAllowed || (!selectedDBs[key] && reachedLimit);
                             return (
                                 <div key={key} className="relative flex items-start">
                                     <div className="flex h-6 items-center">
@@ -59,18 +75,33 @@ const QueryBuilder = ({ state, actions }) => {
                                             name={key}
                                             type="checkbox"
                                             checked={selectedDBs[key] || false}
-                                            onChange={(e) => isAllowed && handleDbSelectionChange(key, e.target.checked)}
+                                            onChange={(e) => {
+                                                if (!isAllowed) return;
+                                                const next = e.target.checked;
+                                                const nextCount = currentSelectedCount + (next && !selectedDBs[key] ? 1 : (!next && selectedDBs[key] ? -1 : 0));
+                                                if (next && capabilities.maxDatabases !== Infinity && nextCount > capabilities.maxDatabases) {
+                                                    toast.error(`Free plan allows selecting up to ${capabilities.maxDatabases} databases.`);
+                                                    return;
+                                                }
+                                                handleDbSelectionChange(key, next);
+                                            }}
                                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                            disabled={!isAllowed}
+                                            disabled={disableCheckbox}
                                         />
                                     </div>
                                     <div className="ml-3 text-sm">
-                                        <label htmlFor={key} className={isAllowed ? "font-medium text-gray-900" : "font-medium text-gray-400"}>{name}</label>
+                                        <label htmlFor={key} className={(isAllowed && !disableCheckbox) ? "font-medium text-gray-900" : "font-medium text-gray-400"}>{name}</label>
+                                        {!isImplemented && (
+                                            <div className="text-xs text-gray-400">Coming soon</div>
+                                        )}
                                     </div>
                                 </div>
                             );
                         })}
                     </fieldset>
+                    {capabilities.maxDatabases !== Infinity && (
+                        <div className="mt-2 text-xs text-gray-500">Free users can select up to {capabilities.maxDatabases} databases. Upgrade for more.</div>
+                    )}
                 </div>
             </div>
 
@@ -85,16 +116,20 @@ const QueryBuilder = ({ state, actions }) => {
                             <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm md:col-span-2 lg:col-span-3">
                                 <div className="text-sm font-medium text-gray-500 mb-1">Total Results Across All Databases</div>
                                 <div className="text-4xl font-bold text-indigo-600">
-                                    {(() => {
-                                        const total = availableDatabases.reduce((sum, dbKey) => {
-                                            const count = searchCounts[dbKey]?.count;
-                                            if (count !== undefined && count !== 'Error' && !isNaN(count)) {
-                                                return sum + Number(count);
-                                            }
-                                            return sum;
-                                        }, 0);
-                                        return total.toLocaleString();
-                                    })()}
+                                    {capabilities.canSeeLiveCounts ? (
+                                        (() => {
+                                            const total = availableDatabases.reduce((sum, dbKey) => {
+                                                const count = searchCounts[dbKey]?.count;
+                                                if (count !== undefined && count !== 'Error' && !isNaN(count)) {
+                                                    return sum + Number(count);
+                                                }
+                                                return sum;
+                                            }, 0);
+                                            return total.toLocaleString();
+                                        })()
+                                    ) : (
+                                        <span className="text-base font-semibold text-gray-500">Upgrade to see live counts</span>
+                                    )}
                                 </div>
                             </div>
                             
@@ -107,15 +142,19 @@ const QueryBuilder = ({ state, actions }) => {
                                     <div key={dbKey} className="bg-white p-3 rounded-lg border">
                                         <div className="text-sm font-medium text-gray-500">{DB_CONFIG[dbKey]?.name || dbKey}</div>
                                         <div className="text-lg font-semibold text-gray-800">
-                                            {isLoading ? (
-                                                <div className="flex items-center gap-2">
-                                                    <Spinner className="h-4 w-4" />
-                                                    <span>Loading...</span>
-                                                </div>
+                                            {capabilities.canSeeLiveCounts ? (
+                                                isLoading ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Spinner className="h-4 w-4" />
+                                                        <span>Loading...</span>
+                                                    </div>
+                                                ) : (
+                                                    count !== undefined && count !== 'Error' 
+                                                        ? Number(count).toLocaleString() 
+                                                        : (count === 'Error' ? 'Error' : 'N/A')
+                                                )
                                             ) : (
-                                                count !== undefined && count !== 'Error' 
-                                                    ? Number(count).toLocaleString() 
-                                                    : (count === 'Error' ? 'Error' : 'N/A')
+                                                <span className="text-sm text-gray-500">Upgrade to view</span>
                                             )}
                                         </div>
                                     </div>
@@ -221,7 +260,16 @@ const QueryBuilder = ({ state, actions }) => {
                                      >
                                         <SparklesIcon className="h-4 w-4 text-purple-500"/>Refine
                                      </button>
-                                     <button onClick={() => copyToClipboard(queries[activeTab] || '')} className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Copy <ClipboardIcon className="h-5 w-5 text-gray-400" /></button>
+                                    <button 
+                                        onClick={async () => {
+                                            const q = queries[activeTab] || '';
+                                            await logger.logFeatureUsed(null, 'copy_query', { db: activeTab});
+                                            copyToClipboard(q);
+                                        }} 
+                                        className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                                    >
+                                        Copy <ClipboardIcon className="h-5 w-5 text-gray-400" />
+                                    </button>
                                 </div>
                             </div>
                             
