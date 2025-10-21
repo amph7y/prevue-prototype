@@ -8,7 +8,7 @@ import logger from '../../utils/logger.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
 
-function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
+function AiProjectCreationModal({ onClose, onCreateProject, isCreating, projectLimit }) {
     const { userId, userAccessLevel } = useAuth();
     const capabilities = getCapabilities(userAccessLevel);
     const [researchTopic, setResearchTopic] = useState('');
@@ -19,6 +19,9 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
     const handleGenerate = async () => {
         if (!capabilities.canUseAiProject) {
             return toast.error('AI project generation is a premium feature.');
+        }
+        if (userAccessLevel === 'free' && !projectLimit?.canCreate) {
+            return toast.error('You have reached your weekly project limit.');
         }
         if (!researchTopic.trim()) return toast.error("Please enter a research topic.");
         setIsLoadingAI(true);
@@ -58,9 +61,9 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
                         <label htmlFor="research-topic" className="block text-sm font-medium text-gray-700">Enter a broad research topic:</label>
                         <input type="text" id="research-topic" value={researchTopic} onChange={(e) => setResearchTopic(e.target.value)} placeholder="e.g., telehealth for chronic diseases" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled={isLoadingAI || !capabilities.canUseAiProject} />
                     </div>
-                    <button onClick={handleGenerate} disabled={isLoadingAI || !researchTopic.trim() || !capabilities.canUseAiProject} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
+                    <button onClick={handleGenerate} disabled={isLoadingAI || !researchTopic.trim() || !capabilities.canUseAiProject || (userAccessLevel === 'free' && !projectLimit?.canCreate)} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                         {isLoadingAI ? <Spinner /> : <SparklesIcon className="h-5 w-5" />}
-                        {isLoadingAI ? 'Generating...' : (capabilities.canUseAiProject ? 'Generate Research Question & PICO' : 'Premium Feature')}
+                        {isLoadingAI ? 'Generating...' : ((userAccessLevel === 'free' && !projectLimit?.canCreate) ? 'Project Limit Reached' : capabilities.canUseAiProject ? 'Generate Research Question & PICO' : 'Premium Feature')}
                     </button>
                     {!capabilities.canUseAiProject && (
                         <div className="p-3 text-sm text-indigo-700 bg-indigo-50 rounded-md">
@@ -84,9 +87,9 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating }) {
                 </div>
                 <div className="p-6 bg-gray-50 border-t flex justify-end gap-3">
                     <button onClick={onClose} className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Cancel</button>
-                    <button onClick={handleCreate} disabled={!generatedData || isCreating} className="inline-flex items-center rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
+                    <button onClick={handleCreate} disabled={!generatedData || isCreating || (userAccessLevel === 'free' && !projectLimit?.canCreate)} className="inline-flex items-center rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
                         {isCreating ? <Spinner /> : <FolderPlusIcon className="h-5 w-5 mr-2" />}
-                        {isCreating ? 'Creating...' : 'Create Project'}
+                        {isCreating ? 'Creating...' : ((userAccessLevel === 'free' && !projectLimit?.canCreate) ? 'Project Limit Reached' : 'Create Project')}
                     </button>
                 </div>
             </div>
@@ -98,6 +101,12 @@ AiProjectCreationModal.propTypes = {
     onClose: PropTypes.func.isRequired,
     onCreateProject: PropTypes.func.isRequired,
     isCreating: PropTypes.bool.isRequired,
+    projectLimit: PropTypes.shape({
+        canCreate: PropTypes.bool.isRequired,
+        currentCount: PropTypes.number.isRequired,
+        limit: PropTypes.number.isRequired,
+        resetDate: PropTypes.instanceOf(Date).isRequired
+    })
 };
 
 export default AiProjectCreationModal;
