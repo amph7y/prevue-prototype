@@ -11,8 +11,11 @@ import AiProjectCreationModal from './AiProjectCreationModal.jsx';
 import GapFinderModal from './GapFinderModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import Header from '../common/Header.jsx';
+import { checkWeeklyProjectLimit, formatResetDate, debugWeeklyLimit, testWeekCalculation, recordProjectCreationEvent } from '../../utils/projectLimits.js';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 
 function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin }) {
+    const { userAccessLevel } = useAuth();
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [newProjectName, setNewProjectName] = useState('');
@@ -23,10 +26,35 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
     const [showGapSection, setShowGapSection] = useState(() => {
         try { return localStorage.getItem('showGapSection') !== 'false'; } catch { return true; }
     });
+    
+    // Project limit state
+    const [projectLimit, setProjectLimit] = useState({ canCreate: true, currentCount: 0, limit: Infinity, resetDate: new Date() });
+    const [isCheckingLimit, setIsCheckingLimit] = useState(false);
 
     useEffect(() => {
         try { localStorage.setItem('showGapSection', String(showGapSection)); } catch {}
     }, [showGapSection]);
+
+    // Check project limit on component load
+    useEffect(() => {
+        const checkLimit = async () => {
+            if (!userId || !userAccessLevel) return;
+            
+            setIsCheckingLimit(true);
+            try {
+                const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
+                setProjectLimit(limitInfo);
+            } catch (error) {
+                console.error('Error checking project limit:', error);
+                // On error, allow creation to avoid blocking users
+                setProjectLimit({ canCreate: true, currentCount: 0, limit: Infinity, resetDate: new Date() });
+            } finally {
+                setIsCheckingLimit(false);
+            }
+        };
+        
+        checkLimit();
+    }, [userId, userAccessLevel]);
 
     useEffect(() => {
         if (!userId || !db) return;
@@ -51,6 +79,14 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             toast.error("Project name cannot be empty.");
             return;
         }
+        
+        // Check project limit before creating
+        if (!projectLimit.canCreate) {
+            const resetDate = formatResetDate(projectLimit.resetDate);
+            toast.error(`You have reached your weekly project limit (${projectLimit.currentCount}/${projectLimit.limit}). Limit resets on ${resetDate}.`);
+            return;
+        }
+        
         setIsCreating(true);
         const projectsCollectionPath = `users/${userId}/projects`;
         try {
@@ -69,6 +105,23 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             
             // Log project creation
             await logger.logProjectCreate(userId, docRef.id, name);
+            
+            // Record project creation event for weekly limit tracking
+            await recordProjectCreationEvent(userId, docRef.id, name);
+            
+            // Re-check the project limit to ensure accuracy
+            try {
+                const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
+                setProjectLimit(limitInfo);
+            } catch (error) {
+                console.error('Error re-checking project limit:', error);
+                // Fallback to optimistic update
+                setProjectLimit(prev => ({
+                    ...prev,
+                    currentCount: prev.currentCount + 1,
+                    canCreate: prev.currentCount + 1 < prev.limit
+                }));
+            }
             
             toast.success(`Project '${name}' created!`);
             onSelectProject({ id: docRef.id, ...newProjectData });
@@ -116,6 +169,11 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             const projectRef = doc(db, `users/${userId}/projects`, projectId);
             await deleteDoc(projectRef);
             await logger.logProjectDelete(userId, projectId, projectName);
+            
+            // Note: Project count does NOT decrease when deleting projects
+            // The weekly limit is based on total projects created during the week, not current projects
+            console.log('Project deleted - count remains the same (based on creation count, not current projects)');
+            
             toast.success(`Project "${projectName}" deleted successfully!`);
         } catch (error) {
             console.error('Failed to delete project:', error);
@@ -125,7 +183,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
     
     return (
         <div className="bg-gray-50 min-h-screen">
-            {isAiModalOpen && <AiProjectCreationModal onClose={() => setIsAiModalOpen(false)} onCreateProject={handleCreateProject} isCreating={isCreating} />}
+            {isAiModalOpen && <AiProjectCreationModal onClose={() => setIsAiModalOpen(false)} onCreateProject={handleCreateProject} isCreating={isCreating} projectLimit={projectLimit} />}
             {isGapFinderModalOpen && <GapFinderModal onClose={() => setIsGapFinderModalOpen(false)} />}
 
             <Header 
@@ -168,18 +226,119 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                         )}
 
                         <div className="bg-white p-6 rounded-lg shadow-md">
-                            <h2 className="text-xl font-semibold text-gray-800">Create a New Project</h2>
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-xl font-semibold text-gray-800">Create a New Project</h2>
+                                    <div className="text-sm text-gray-500 mt-1">
+                                        Access Level: <span className={`font-medium ${userAccessLevel === 'premium' ? 'text-green-600' : 'text-blue-600'}`}>
+                                            {userAccessLevel === 'premium' ? 'Premium (Unlimited)' : 'Free (2/week)'}
+                                        </span>
+                                    </div>
+                                </div>
+                                {projectLimit.limit !== Infinity && (
+                                    <div className="text-sm text-gray-600">
+                                        {isCheckingLimit ? (
+                                            <span className="flex items-center">
+                                                <Spinner />
+                                                <span className="ml-2">Checking limit...</span>
+                                            </span>
+                                        ) : (
+                                            <span>
+                                                {projectLimit.currentCount}/{projectLimit.limit} projects created this week
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {!projectLimit.canCreate && userAccessLevel === 'free' && (
+                                <div className="mb-4 p-3 text-sm text-amber-700 bg-amber-50 rounded-md">
+                                    You have reached your weekly project creation limit ({projectLimit.currentCount}/{projectLimit.limit} projects created this week). 
+                                    Your limit will reset on {formatResetDate(projectLimit.resetDate)}.
+                                </div>
+                            )}
+                            
+                            {projectLimit.canCreate && projectLimit.limit !== Infinity && projectLimit.currentCount > 0 && userAccessLevel === 'free' && (
+                                <div className="mb-4 p-3 text-sm text-blue-700 bg-blue-50 rounded-md">
+                                    You have created {projectLimit.currentCount} of {projectLimit.limit} projects this week. 
+                                    Your limit will reset on {formatResetDate(projectLimit.resetDate)}.
+                                    <br />
+                                    <span className="text-xs text-gray-600 mt-1 block">
+                                        Note: The limit is based on total projects created this week, not current projects.
+                                    </span>
+                                </div>
+                            )}
+                            
+                            {/* Debug buttons - remove in production */}
+                            {/* <div className="mb-4 space-x-4">
+                                <button 
+                                    onClick={async () => {
+                                        console.log('Current project limit state:', projectLimit);
+                                        console.log('User access level:', userAccessLevel);
+                                        console.log('User ID:', userId);
+                                        await debugWeeklyLimit(userId, userAccessLevel);
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                >
+                                    Debug: Check Weekly Limit
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        testWeekCalculation();
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                >
+                                    Test: Week Calculation
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        console.log('Current project limit before manual refresh:', projectLimit);
+                                        checkWeeklyProjectLimit(userId, userAccessLevel).then(limitInfo => {
+                                            console.log('Manual refresh result:', limitInfo);
+                                            setProjectLimit(limitInfo);
+                                        });
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                                >
+                                    Refresh: Project Limit
+                                </button>
+                            </div> */}
+                            
                             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">1. Create Manually</label>
                                     <div className="mt-1 flex gap-2">
-                                        <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} onKeyDown={handleKeyDown} placeholder="Enter project name..." className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                                        <button onClick={() => handleCreateProject(newProjectName)} disabled={isCreating || !newProjectName.trim()} className="inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-gray-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-700 disabled:bg-gray-300"><FolderPlusIcon className="h-5 w-5" />Create</button>
+                                        <input 
+                                            type="text" 
+                                            value={newProjectName} 
+                                            onChange={(e) => setNewProjectName(e.target.value)} 
+                                            onKeyDown={handleKeyDown} 
+                                            placeholder="Enter project name..." 
+                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+                                            disabled={userAccessLevel === 'free' && !projectLimit.canCreate}
+                                        />
+                                        <button 
+                                            onClick={() => handleCreateProject(newProjectName)} 
+                                            disabled={isCreating || !newProjectName.trim() || (userAccessLevel === 'free' && !projectLimit.canCreate)} 
+                                            className="inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-gray-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-700 disabled:bg-gray-300"
+                                        >
+                                            <FolderPlusIcon className="h-5 w-5" />
+                                            {(userAccessLevel === 'free' && !projectLimit.canCreate) ? 'Limit Reached' : 'Create'}
+                                        </button>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">2. Generate from Research Idea</label>
-                                    <div className="mt-1"><button onClick={() => setIsAiModalOpen(true)} disabled={isCreating} className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"><SparklesIcon className="h-5 w-5" />Generate with AI</button></div>
+                                    <div className="mt-1">
+                                        <button 
+                                            onClick={() => setIsAiModalOpen(true)} 
+                                            disabled={isCreating || (userAccessLevel === 'free' && !projectLimit.canCreate)} 
+                                            className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"
+                                        >
+                                            <SparklesIcon className="h-5 w-5" />
+                                            {(userAccessLevel === 'free' && !projectLimit.canCreate) ? 'Limit Reached' : 'Generate with AI'}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

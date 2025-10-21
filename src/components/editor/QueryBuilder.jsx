@@ -60,6 +60,9 @@ const QueryBuilder = ({ state, actions }) => {
             <div className="mt-8 space-y-4">
                 <div className="p-4 border rounded-lg bg-gray-50">
                     <h3 className="text-lg font-semibold text-gray-800">Select Databases</h3>
+                    {capabilities.maxDatabases !== Infinity && (
+                        <div className="mt-2 text-xs text-gray-500">Free users can select up to {capabilities.maxDatabases} databases. Upgrade for more.</div>
+                    )}
                     <fieldset className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                         {Object.entries(DB_CONFIG).map(([key, { name }]) => {
                             const isImplemented = !DISABLED_DBS.includes(key);
@@ -99,9 +102,7 @@ const QueryBuilder = ({ state, actions }) => {
                             );
                         })}
                     </fieldset>
-                    {capabilities.maxDatabases !== Infinity && (
-                        <div className="mt-2 text-xs text-gray-500">Free users can select up to {capabilities.maxDatabases} databases. Upgrade for more.</div>
-                    )}
+                    
                 </div>
             </div>
 

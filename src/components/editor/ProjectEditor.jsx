@@ -59,6 +59,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    
+    // Track generation state for restrictions
+    const [conceptsGenerated, setConceptsGenerated] = useState(false);
+    const [keywordsGenerated, setKeywordsGenerated] = useState(false);
 
     const [selectedDBs, setSelectedDBs] = useState(() => {
         // Implemented DBs
@@ -101,6 +105,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 setConcepts(loadedConcepts);
                 setNegativeKeywords(data.negativeKeywords || ['']);
                 setKeywordStyle(data.keywordStyle || 'balanced');
+                
+                // Load generation state
+                setConceptsGenerated(data.conceptsGenerated || false);
+                setKeywordsGenerated(data.keywordsGenerated || false);
             }
         });
     }, [project.id, userId]);
@@ -109,11 +117,19 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
         debounceTimeout.current = setTimeout(() => {
             const docRef = doc(db, `users/${userId}/projects/${project.id}`);
-            const dataToSave = { researchQuestion, concepts, negativeKeywords, keywordStyle, lastSaved: serverTimestamp() };
+            const dataToSave = { 
+                researchQuestion, 
+                concepts, 
+                negativeKeywords, 
+                keywordStyle, 
+                conceptsGenerated,
+                keywordsGenerated,
+                lastSaved: serverTimestamp() 
+            };
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
         return () => clearTimeout(debounceTimeout.current);
-    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, project.id, userId]);
+    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, project.id, userId]);
 
     useEffect(() => {
         if (step === 2) {
@@ -154,6 +170,12 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
 
     const handleGeneratePicoFromQuestion = async () => {
         if (!researchQuestion.trim()) return toast.error('Please enter a research question first.');
+        
+        // Check if concepts have already been generated for this project
+        if (conceptsGenerated && capabilities.canGenerateConceptsOncePerProject) {
+            return toast.error('Concepts can only be generated once per project. Please edit existing concepts or create a new project.');
+        }
+        
         setIsLoading(true);
         
         const prompt = `
@@ -223,6 +245,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             }
                         
             setConcepts(generatedConcepts);
+            setConceptsGenerated(true);
             
             // Log concept generation
             await logger.logFeatureUsed(userId, 'concept_generation', {
@@ -275,6 +298,11 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const handleGenerateKeywords = async (conceptsData = concepts, keywordStyle = 'balanced') => {
         if (!conceptsData || !Array.isArray(conceptsData) || conceptsData.length === 0) {
             return toast.error('No concepts defined. Please generate PICO concepts first.');
+        }
+        
+        // Check if keywords have already been generated for this project
+        if (keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject) {
+            return toast.error('Keywords can only be generated once per project. Please edit existing keywords or create a new project.');
         }
         
         setIsLoading(true);
@@ -346,6 +374,7 @@ Return ONLY the JSON object with no additional text.`;
             });
             
             setConcepts(updatedConcepts);
+            setKeywordsGenerated(true);
             
             // Log keyword generation
             await logger.logFeatureUsed(userId, 'keyword_generation', {
@@ -708,7 +737,7 @@ Return ONLY the JSON object with no additional text.`;
                         <div className="mb-8">{renderStepIndicator()}</div>
                         {step === 1 && (
                             <DefineStep
-                                state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle }}
+                                state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, capabilities }}
                                 actions={{ setResearchQuestion, setConcepts, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleGeneratePicoFromQuestion, setStep, showMenu, findSynonyms, onBackToDashboard }}
                             />
                         )}

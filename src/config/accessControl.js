@@ -5,13 +5,19 @@ export const ACCESS_LEVELS = {
         canUseAiProject: false,
         canGenerateConceptsAndKeywords: true,
         maxDatabases: 2,
-        canSeeLiveCounts: false
+        canSeeLiveCounts: false,
+        maxProjectsPerWeek: 2,
+        canGenerateConceptsOncePerProject: true,
+        canGenerateKeywordsOncePerProject: true
     },
     premium: {
         canUseAiProject: true,
         canGenerateConceptsAndKeywords: true,
         maxDatabases: Infinity,
-        canSeeLiveCounts: true
+        canSeeLiveCounts: true,
+        maxProjectsPerWeek: Infinity,
+        canGenerateConceptsOncePerProject: true,
+        canGenerateKeywordsOncePerProject: true
     }
     
 };
