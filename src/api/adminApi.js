@@ -88,8 +88,8 @@ export const adminApi = {
     return logApi.getUserActivitySummary(userId, options);
   },
 
-  getRealTimeActivity: async () => {
-    return logApi.getRealTimeActivity();
+  getRealTimeActivity: async (options = {}) => {
+    return logApi.getRealTimeActivity(options);
   },
 };
 
