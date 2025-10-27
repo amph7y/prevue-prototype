@@ -105,11 +105,14 @@ const AdminStats = ({ users }) => {
         setLoading(true);
         setError(null);
 
+        // Get admin user IDs to exclude from statistics
+        const adminUserIds = users.filter(user => user.role === 'admin').map(user => user.id);
+
         const [hoursData, daysData, summaryData, realTimeData] = await Promise.all([
-          adminApi.getBusiestHours({ days: 30 }),
-          adminApi.getBusiestDays({ weeks: 4 }),
-          adminApi.getActivitySummary({ days: 30 }),
-          adminApi.getRealTimeActivity()
+          adminApi.getBusiestHours({ days: 30, adminUserIds }),
+          adminApi.getBusiestDays({ weeks: 4, adminUserIds }),
+          adminApi.getActivitySummary({ days: 30, adminUserIds }),
+          adminApi.getRealTimeActivity({ adminUserIds })
         ]);
 
         setBusiestHours(hoursData.busiestHours || []);
@@ -132,7 +135,7 @@ const AdminStats = ({ users }) => {
         const safeGet = (obj, path) => {
           try { return path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj); } catch { return undefined; }
         };
-        const countWhere = (fn) => logs.filter(l => !isAdminAction(l.action) && !isInitiated(l.action) && fn(l)).length;
+        const countWhere = (fn) => logs.filter(l => !isAdminAction(l.action) && !isInitiated(l.action) && !adminUserIds.includes(l.userId) && fn(l)).length;
         const byAction = (a) => (l) => l.action === a;
         const byFeature = (name) => (l) => l.action === 'feature_used' && safeGet(l, 'details.featureName') === name;
 
@@ -377,8 +380,9 @@ const AdminStats = ({ users }) => {
                       ></div>
                     </div>
                   </div>
-                  <div className="w-12 text-sm font-medium text-gray-900 text-right">
-                    {hour.count}
+                  <div className="w-20 text-sm font-medium text-gray-900 text-right">
+                    <div>{hour.count} actions</div>
+                    <div className="text-xs text-gray-500">{hour.userCount} users</div>
                   </div>
                 </div>
               ))}
@@ -405,7 +409,10 @@ const AdminStats = ({ users }) => {
             <div className="space-y-3">
               {busiestDays.map((day, index) => (
                 <div key={index} className="flex items-center">
-                  <div className="w-20 text-sm text-gray-600">{day.dayName}</div>
+                  <div className="w-24 text-sm text-gray-600">
+                    <div className="font-medium">{day.dayName}</div>
+                    <div className="text-xs text-gray-500">{day.dateFormatted}</div>
+                  </div>
                   <div className="flex-1 mx-4">
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
@@ -414,8 +421,9 @@ const AdminStats = ({ users }) => {
                       ></div>
                     </div>
                   </div>
-                  <div className="w-12 text-sm font-medium text-gray-900 text-right">
-                    {day.count}
+                  <div className="w-20 text-sm font-medium text-gray-900 text-right">
+                    <div>{day.count} actions</div>
+                    <div className="text-xs text-gray-500">{day.userCount} users</div>
                   </div>
                 </div>
               ))}

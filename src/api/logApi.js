@@ -11,6 +11,11 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 
+// Helper function to identify admin actions
+const isAdminAction = (action) => {
+  return action && action.startsWith('admin_');
+};
+
 // Log API functions for retrieving and analyzing activity logs
 export const logApi = {
   // Get all activity logs with pagination
@@ -111,7 +116,8 @@ export const logApi = {
       const {
         days = 30,
         startDate = null,
-        endDate = null
+        endDate = null,
+        adminUserIds = []
       } = options;
 
       let start, end;
@@ -131,10 +137,24 @@ export const logApi = {
 
       // Group logs by hour
       const hourlyActivity = {};
+      const hourlyUsers = {};
       
       logs.logs.forEach(log => {
+        // Skip admin actions and admin users to focus on regular user activity only
+        if (isAdminAction(log.action) || adminUserIds.includes(log.userId)) {
+          return;
+        }
+        
         const hour = log.createdAt.getHours();
         hourlyActivity[hour] = (hourlyActivity[hour] || 0) + 1;
+        
+        // Track unique users per hour
+        if (!hourlyUsers[hour]) {
+          hourlyUsers[hour] = new Set();
+        }
+        if (log.userId) {
+          hourlyUsers[hour].add(log.userId);
+        }
       });
 
       // Convert to array and sort by activity count
@@ -147,6 +167,7 @@ export const logApi = {
             hour: hNum,
             hourFormatted: `${ampmHour}:00 ${suffix}`,
             count,
+            userCount: hourlyUsers[hour] ? hourlyUsers[hour].size : 0,
             percentage: (count / logs.logs.length) * 100
           };
         })
@@ -169,7 +190,8 @@ export const logApi = {
       const {
         weeks = 4,
         startDate = null,
-        endDate = null
+        endDate = null,
+        adminUserIds = []
       } = options;
 
       let start, end;
@@ -187,23 +209,51 @@ export const logApi = {
         limitCount: 10000
       });
 
-      // Group logs by day of week
+      // Group logs by specific dates
       const dailyActivity = {};
+      const dailyUsers = {};
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       
       logs.logs.forEach(log => {
-        const dayOfWeek = log.createdAt.getDay();
-        dailyActivity[dayOfWeek] = (dailyActivity[dayOfWeek] || 0) + 1;
+        // Skip admin actions and admin users to focus on regular user activity only
+        if (isAdminAction(log.action) || adminUserIds.includes(log.userId)) {
+          return;
+        }
+        
+        const logDate = log.createdAt;
+        const dateKey = logDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        const dayOfWeek = logDate.getDay();
+        
+        dailyActivity[dateKey] = (dailyActivity[dateKey] || 0) + 1;
+        
+        // Track unique users per day
+        if (!dailyUsers[dateKey]) {
+          dailyUsers[dateKey] = new Set();
+        }
+        if (log.userId) {
+          dailyUsers[dateKey].add(log.userId);
+        }
       });
 
       // Convert to array and sort by activity count
       const busiestDays = Object.entries(dailyActivity)
-        .map(([day, count]) => ({
-          day: parseInt(day),
-          dayName: dayNames[parseInt(day)],
-          count,
-          percentage: (count / logs.logs.length) * 100
-        }))
+        .map(([dateKey, count]) => {
+          const date = new Date(dateKey);
+          const dayOfWeek = date.getDay();
+          return {
+            date: dateKey,
+            day: dayOfWeek,
+            dayName: dayNames[dayOfWeek],
+            dateFormatted: date.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric'
+            }),
+            count,
+            userCount: dailyUsers[dateKey] ? dailyUsers[dateKey].size : 0,
+            percentage: (count / logs.logs.length) * 100
+          };
+        })
         .sort((a, b) => b.count - a.count);
 
       return {
@@ -323,8 +373,10 @@ export const logApi = {
   },
 
   // Get real-time activity (last hour)
-  getRealTimeActivity: async () => {
+  getRealTimeActivity: async (options = {}) => {
     try {
+      const { adminUserIds = [] } = options;
+      
       const oneHourAgo = new Date();
       oneHourAgo.setHours(oneHourAgo.getHours() - 1);
 
@@ -336,6 +388,11 @@ export const logApi = {
       const intervalActivity = {};
       
       logs.logs.forEach(log => {
+        // Skip admin actions and admin users to focus on regular user activity only
+        if (isAdminAction(log.action) || adminUserIds.includes(log.userId)) {
+          return;
+        }
+        
         const minutes = Math.floor(log.createdAt.getMinutes() / 10) * 10;
         const interval = `${log.createdAt.getHours().toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         intervalActivity[interval] = (intervalActivity[interval] || 0) + 1;

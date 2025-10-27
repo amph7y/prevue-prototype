@@ -12,7 +12,44 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
 
   const workflowSectionRef = useRef(null);
   const [workflowVisible, setWorkflowVisible] = useState(false);
+  const [activeSection, setActiveSection] = useState('hero');
+  
+  // Section refs for navigation
+  const heroRef = useRef(null);
+  const featuresRef = useRef(null);
+  const betterWayRef = useRef(null);
+  const beforeAfterRef = useRef(null);
+  const focusMattersRef = useRef(null);
+  const whoIsItForRef = useRef(null);
+  const howItWorksRef = useRef(null);
+  const testimonialsRef = useRef(null);
+  const teamRef = useRef(null);
+  const contactRef = useRef(null);
 
+
+  // Navigation functions
+  const scrollToSection = (sectionId) => {
+    const sectionRefs = {
+      hero: heroRef,
+      features: featuresRef,
+      'better-way': betterWayRef,
+      'before-after': beforeAfterRef,
+      'focus-matters': focusMattersRef,
+      'who-is-it-for': whoIsItForRef,
+      'how-it-works': howItWorksRef,
+      testimonials: testimonialsRef,
+      team: teamRef,
+      contact: contactRef
+    };
+    
+    const targetRef = sectionRefs[sectionId];
+    if (targetRef && targetRef.current) {
+      targetRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
 
   const handleContactChange = (e) => {
     const { name, value } = e.target;
@@ -92,23 +129,58 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
   };
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
+    // Workflow animation observer
+    const workflowObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             setWorkflowVisible(true);
-            observer.unobserve(workflowSectionRef.current);
+            workflowObserver.unobserve(workflowSectionRef.current);
           }
         });
       },
       { threshold: 0.2 }
     );
 
-    if (workflowSectionRef.current) {
-      observer.observe(workflowSectionRef.current);
+    if (howItWorksRef.current) {
+      workflowObserver.observe(howItWorksRef.current);
     }
 
-    return () => observer.disconnect();
+    // Scroll spy observer
+    const scrollSpyObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const sectionId = entry.target.getAttribute('data-section');
+            if (sectionId) {
+              setActiveSection(sectionId);
+            }
+          }
+        });
+      },
+      { 
+        threshold: 0.3,
+        rootMargin: '-20% 0px -20% 0px'
+      }
+    );
+
+    // Observe all sections
+    const sections = [
+      heroRef, featuresRef, betterWayRef, beforeAfterRef, 
+      focusMattersRef, whoIsItForRef, howItWorksRef, 
+      testimonialsRef, teamRef, contactRef
+    ];
+
+    sections.forEach(ref => {
+      if (ref.current) {
+        scrollSpyObserver.observe(ref.current);
+      }
+    });
+
+    return () => {
+      workflowObserver.disconnect();
+      scrollSpyObserver.disconnect();
+    };
   }, []);
 
   return (
@@ -137,16 +209,53 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           onGoToAdmin={onGoToAdmin}
         />
 
+        {/* Navigation Menu */}
+        <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-8">
+                <div className="flex space-x-6">
+                  {[
+                    { id: 'hero', label: 'Home' },
+                    { id: 'features', label: 'Features' },
+                    { id: 'better-way', label: 'Better Way' },
+                    { id: 'before-after', label: 'Before/After' },
+                    { id: 'focus-matters', label: 'Focus' },
+                    { id: 'who-is-it-for', label: 'Who Is It For' },
+                    { id: 'how-it-works', label: 'How It Works' },
+                    { id: 'testimonials', label: 'Testimonials' },
+                    { id: 'team', label: 'Team' },
+                    { id: 'contact', label: 'Contact' }
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => scrollToSection(item.id)}
+                      className={`text-sm font-medium transition-colors duration-200 ${
+                        activeSection === item.id
+                          ? 'text-main border-b-2 border-main'
+                          : 'text-gray-600 hover:text-main'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </nav>
+
         {/* Hero Section */}
-        <main className="relative isolate">
+        <main ref={heroRef} data-section="hero" className="relative isolate">
           <div className="hero-bg">
             <div className="mx-auto max-w-4xl px-6 pt-24 pb-16 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-28 text-center">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-text-dark">
-                <span className="block gradient-text">3 Steps</span>
-                <span className="block mt-2 text-3xl sm:text-4xl lg:text-5xl">To Your Definitive Search Strategy</span>
+                <span className="block gradient-text">3 STEPS is all you need…</span>
+                <span className="block mt-2 text-3xl sm:text-4xl lg:text-5xl">To Revolutionize how you search & screen literature.</span>
               </h1>
               <p className="mt-6 text-lg sm:text-xl leading-8 text-gray-700">
-                Stop building queries. Start finding answers. PreVue forges your research question into an optimized, <strong className="text-secondary">multi-database</strong> strategy and executes it with a <strong className="text-secondary">single click.</strong>
+                PreVue is an AI-powered tool that builds optimized, multi-database queries for systematic reviews — helping you find what matters, faster.
+                <strong className="text-secondary"> Save weeks of manual screening</strong> with smart query refinement and relevance filtering.
               </p>
               <div className="mt-10 flex items-center justify-center gap-x-6">
                 <button
@@ -160,7 +269,59 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
             </div>
           </div>
 
-          <div className="bg-white relative py-16 sm:py-24">
+          {/* Key Features */}
+          <div ref={featuresRef} data-section="features" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
+            <div className="mx-auto max-w-7xl px-6 lg:px-8">
+              {/* Header */}
+              <div className="max-w-3xl">
+                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl text-left">
+                  Key Features
+                </h2>
+                <p className="mt-4 text-lg leading-8 text-gray-600 text-left">
+                  Everything you need for fast, reproducible, and intelligent literature searches.
+                </p>
+              </div>
+              {/* Feature Cards */}
+              <div className="mx-auto mt-16 grid max-w-lg grid-cols-1 gap-8 sm:max-w-2xl sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
+                {/* Card 1 */}
+                <div className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
+                  <div className="text-pink-500 text-4xl mb-4">🧠</div>
+                  <h3 className="text-lg font-semibold leading-7 text-gray-900">
+                    AI Concept & Keyword Generator
+                  </h3>
+                  <p className="mt-2 text-base leading-7 text-gray-600">
+                    Automatically extract research concepts and generate optimized keywords
+                    using PICO, SPIDER, or CIMO frameworks.
+                  </p>
+                </div>
+
+                {/* Card 2 */}
+                <div className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
+                  <div className="text-blue-500 text-4xl mb-4">🔍</div>
+                  <h3 className="text-lg font-semibold leading-7 text-gray-900">
+                    Smart Query Builder
+                  </h3>
+                  <p className="mt-2 text-base leading-7 text-gray-600">
+                    Build multi-database queries (PubMed, Embase, Scopus, Web of Science,
+                    Semantic Scholar, CORE) with live count tracking.
+                  </p>
+                </div>
+
+                {/* Card 3 */}
+                <div className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
+                  <div className="text-purple-500 text-4xl mb-4">⚙️</div>
+                  <h3 className="text-lg font-semibold leading-7 text-gray-900">
+                    AI Query Refiner
+                  </h3>
+                  <p className="mt-2 text-base leading-7 text-gray-600">
+                    Refine and compare results instantly, adjust fields, and apply negative
+                    keywords for better precision.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div ref={betterWayRef} data-section="better-way" className="bg-white relative py-16 sm:py-24">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
                 <div className="lg:text-left">
@@ -212,7 +373,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Before and After Section */}
-          <div className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
+          <div ref={beforeAfterRef} data-section="before-after" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-2xl lg:text-center">
                 <p className="mt-2 text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">Transform Your Workflow</p>
@@ -276,7 +437,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Focus on What Matters Section */}
-          <div className="bg-white py-16 sm:py-24">
+          <div ref={focusMattersRef} data-section="focus-matters" className="bg-white py-16 sm:py-24">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-3xl text-center">
                 <h2 className="text-base font-semibold leading-7 text-main">FOCUS ON WHAT MATTERS</h2>
@@ -301,7 +462,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Who is it for Section */}
-          <div className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
+          <div ref={whoIsItForRef} data-section="who-is-it-for" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-3xl text-center">
                 <h2 className="text-base font-semibold leading-7 text-main">BUILT FOR RESEARCHERS, BY RESEARCHERS</h2>
@@ -334,7 +495,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* How it works */}
-          <div ref={workflowSectionRef} className="bg-white py-16 sm:py-24">
+          <div ref={howItWorksRef} data-section="how-it-works" className="bg-white py-16 sm:py-24">
             <div className="mx-auto max-w-4xl px-6 lg:px-8 text-center">
               <h2 className="text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">A Radically Simple Workflow</h2>
               <p className="mt-4 text-lg text-gray-700">A streamlined process for superior results.</p>
@@ -362,58 +523,201 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Testimonials Section */}
-          <div className="bg-fill angled-top-white py-24 sm:py-32">
+          <div ref={testimonialsRef} data-section="testimonials" className="bg-fill angled-top-white py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-xl text-center">
                 <h2 className="text-lg font-semibold leading-8 tracking-tight text-main">Testimonials</h2>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">See What Researchers Are Saying</p>
+                <p className="mt-2 text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">What Researchers Say is the best about PreVue:</p>
               </div>
-              <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 lg:max-w-none lg:grid-cols-2 gap-8">
-                <figure className="rounded-2xl bg-white p-8 text-sm leading-6 shadow-lg">
-                  <div className="relative group cursor-pointer">
-                    <div className="h-48 w-full bg-gradient-to-br from-red-100 to-red-50 rounded-lg flex items-center justify-center">
-                      <span className="text-gray-500 text-lg">Video Placeholder</span>
-                    </div>
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
-                      <svg className="h-16 w-16 text-white/80 group-hover:text-white transition-colors" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7.5 6.122C7.5 5.43 8.203 4.943 8.81 5.314L18.234 11.37C18.794 11.711 18.794 12.527 18.234 12.868L8.81 18.924C8.203 19.295 7.5 18.808 7.5 18.116V6.122Z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <blockquote className="text-gray-900 mt-6">
-                    <p>"PreVue saved me at least a week on my last systematic review. The time I got back for actual analysis was invaluable. It's a game-changer for building a comprehensive and reproducible search."</p>
+              <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 lg:max-w-none lg:grid-cols-2 xl:grid-cols-3 gap-8">
+                {/* Testimonial 1 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"To be honest, i liked the idea of merging the keywords, the scope of search into one tool that gives the results in different journals and database which makes it easy to conduct systematic review"</p>
                   </blockquote>
-                  <figcaption className="mt-6 flex items-center gap-x-4">
-                    <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold">R</span>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">SA</span>
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">Researcher</div>
-                      <div className="text-gray-600">Leading University</div>
+                      <div className="font-semibold text-gray-900 text-sm">Mr. S A</div>
+                      <div className="text-gray-600 text-xs">Master Student</div>
                     </div>
                   </figcaption>
                 </figure>
-                <figure className="rounded-2xl bg-white p-8 text-sm leading-6 shadow-lg">
-                  <div className="relative group cursor-pointer">
-                    <div className="h-48 w-full bg-gradient-to-br from-orange-100 to-orange-50 rounded-lg flex items-center justify-center">
-                      <span className="text-gray-500 text-lg">Video Placeholder</span>
-                    </div>
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
-                      <svg className="h-16 w-16 text-white/80 group-hover:text-white transition-colors" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7.5 6.122C7.5 5.43 8.203 4.943 8.81 5.314L18.234 11.37C18.794 11.711 18.794 12.527 18.234 12.868L8.81 18.924C8.203 19.295 7.5 18.808 7.5 18.116V6.122Z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <blockquote className="text-gray-900 mt-6">
-                    <p>"The ability to see live result counts as I refine my keywords is incredible. It removes all the guesswork and gives me complete confidence in my search strategy before I even begin screening."</p>
+
+                {/* Testimonial 2 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"It's convenience"</p>
                   </blockquote>
-                  <figcaption className="mt-6 flex items-center gap-x-4">
-                    <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold">IS</span>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">OA</span>
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">Information Specialist</div>
-                      <div className="text-gray-600">Medical Library</div>
+                      <div className="font-semibold text-gray-900 text-sm">Mr. O A</div>
+                      <div className="text-gray-600 text-xs">PharmD Student</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 3 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"The idea is amazing and has so much potential, the principle of unifying and simplifying a tedious manual workflow all in the same platform is extremely helpful to anyone doing a systematic review, it even cuts the time for brainstorming possible publishable papers since you don't have to do all these steps for each research question you have."</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">AG</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Mr. A G</div>
+                      <div className="text-gray-600 text-xs">Undergraduate Student</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 4 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"The concept of the idea is excellent. I watched the video and was very impressed"</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">ZN</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Dr. Z N</div>
+                      <div className="text-gray-600 text-xs">Researcher</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 5 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"simultaneous searches and AI integration to generate keywords"</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">ME</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Dr. M E</div>
+                      <div className="text-gray-600 text-xs">Researcher</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 6 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"How easy it is to use the website, the fact that the prompts can be added using the help of Ai, and that the number of studies shows for each database"</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-teal-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">GA</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Mr. G A</div>
+                      <div className="text-gray-600 text-xs">PharmD Student</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 7 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"it can reduce alot of time, but you can add more things that also reduce screening time by enhancing the specificity of the results"</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">OM</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Mr. O M</div>
+                      <div className="text-gray-600 text-xs">Undergraduate Student</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 8 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"the aspect of giving you the keywords is very very useful and it is one of the most bothersome aspect of the traditional methods because you have to account for different databases."</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-pink-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">AI</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Mrs. A I</div>
+                      <div className="text-gray-600 text-xs">Post-Grad Student</div>
+                  </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 9 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"Innovative, will save researchers time"</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">HE</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Prof. H E</div>
+                      <div className="text-gray-600 text-xs">Researcher</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 10 */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"ease of use and also the future impact that prevue holds , the use cases of this application is huge."</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-cyan-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">AE</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Dr. A E</div>
+                      <div className="text-gray-600 text-xs">MD & Post-Grad Student</div>
+                    </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 11 - Previous */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"PreVue saved me at least a week on my last systematic review. The time I got back for actual analysis was invaluable. It's a game-changer for building a comprehensive and reproducible search."</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">R</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Researcher</div>
+                      <div className="text-gray-600 text-xs">Leading University</div>
+                  </div>
+                  </figcaption>
+                </figure>
+
+                {/* Testimonial 12 - Previous */}
+                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                  <blockquote className="text-gray-900">
+                    <p>"The ability to see live result counts as I refine my keywords is incredible. It removes all the guesswork and gives me complete confidence in my search strategy before I even begin screening."</p>
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-x-3">
+                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center">
+                      <span className="text-gray-600 font-semibold text-xs">IS</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Information Specialist</div>
+                      <div className="text-gray-600 text-xs">Medical Library</div>
                     </div>
                   </figcaption>
                 </figure>
@@ -428,7 +732,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                 <span className="block">Ready to Revolutionize Your Research?</span>
               </h2>
               <p className="mt-4 text-xl leading-8 text-white">
-                Forge a search strategy as <strong className="text-main">robust</strong> as your research. The <strong className="text-main">strength</strong> of your review depends on it.
+                Be Among the<strong className="text-main"> FIRST</strong> to Explore <strong className="text-main">PreVue</strong>
               </p>
               <button
                 onClick={onGetStarted}
@@ -440,7 +744,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Team Section */}
-          <div className="bg-fill angled-top-white py-24 sm:py-32">
+          <div ref={teamRef} data-section="team" className="bg-fill angled-top-white py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-2xl lg:text-center">
                 <h2 className="text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">Meet the Innovators</h2>
@@ -466,7 +770,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Contact Us Section */}
-          <div className="bg-white py-16 sm:py-24">
+          <div ref={contactRef} data-section="contact" className="bg-white py-16 sm:py-24">
             <div className="mx-auto max-w-2xl px-6 lg:px-8 text-center">
               <h2 className="text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">Get in Touch</h2>
               <p className="mt-4 text-base leading-8 text-gray-700">Have questions, feedback, or want to collaborate? We'd love to hear from you.</p>
