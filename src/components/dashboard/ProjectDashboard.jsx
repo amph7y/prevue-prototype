@@ -6,9 +6,11 @@ import { cn } from '../../utils/cn.js';
 import { handleError } from '../../utils/utils.js';
 import { PROJECT_COLORS } from '../../config/constants.js';
 import logger from '../../utils/logger.js';
-import { FolderPlusIcon, SearchIcon, SparklesIcon, LightBulbIcon } from '../common/Icons.jsx';
+import { FolderPlusIcon, LightBulbIcon } from '../common/Icons.jsx';
 import AiProjectCreationModal from './AiProjectCreationModal.jsx';
 import GapFinderModal from './GapFinderModal.jsx';
+import ProjectCreationChoiceModal from './ProjectCreationChoiceModal.jsx';
+import ManualProjectCreationModal from './ManualProjectCreationModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import Header from '../common/Header.jsx';
 import { checkWeeklyProjectLimit, formatResetDate, debugWeeklyLimit, testWeekCalculation, recordProjectCreationEvent } from '../../utils/projectLimits.js';
@@ -18,9 +20,10 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
     const { userAccessLevel } = useAuth();
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [newProjectName, setNewProjectName] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     
+    const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [isGapFinderModalOpen, setIsGapFinderModalOpen] = useState(false);
     const [showGapSection, setShowGapSection] = useState(() => {
@@ -40,7 +43,10 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
         const checkLimit = async () => {
             if (!userId || !userAccessLevel) return;
             
+            // Reset to default state immediately to avoid showing stale data
+            setProjectLimit({ canCreate: true, currentCount: 0, limit: Infinity, resetDate: new Date() });
             setIsCheckingLimit(true);
+            
             try {
                 const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
                 setProjectLimit(limitInfo);
@@ -55,6 +61,28 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
         
         checkLimit();
     }, [userId, userAccessLevel]);
+
+    // Re-check project limit when choice modal opens to ensure fresh data
+    useEffect(() => {
+        const checkLimit = async () => {
+            if (!userId || !userAccessLevel || !isChoiceModalOpen) return;
+            
+            setIsCheckingLimit(true);
+            try {
+                const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
+                setProjectLimit(limitInfo);
+            } catch (error) {
+                console.error('Error checking project limit:', error);
+                setProjectLimit({ canCreate: true, currentCount: 0, limit: Infinity, resetDate: new Date() });
+            } finally {
+                setIsCheckingLimit(false);
+            }
+        };
+        
+        if (isChoiceModalOpen) {
+            checkLimit();
+        }
+    }, [isChoiceModalOpen, userId, userAccessLevel]);
 
     useEffect(() => {
         if (!userId || !db) return;
@@ -130,16 +158,25 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             handleError(error, 'creating project');
         } finally {
             setIsCreating(false);
-            setNewProjectName('');
             setIsAiModalOpen(false);
+            setIsManualModalOpen(false);
+            setIsChoiceModalOpen(false);
             setIsGapFinderModalOpen(false);
         }
     };
 
-    const handleKeyDown = (event) => {
-        if (event.key === 'Enter') {
-            handleCreateProject(newProjectName);
-        }
+    const handleCreateProjectClick = () => {
+        setIsChoiceModalOpen(true);
+    };
+
+    const handleSelectManual = () => {
+        setIsChoiceModalOpen(false);
+        setIsManualModalOpen(true);
+    };
+
+    const handleSelectAI = () => {
+        setIsChoiceModalOpen(false);
+        setIsAiModalOpen(true);
     };
 
     const handleGapInterest = async (interested) => {
@@ -183,7 +220,32 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
     
     return (
         <div className="bg-gray-50 min-h-screen">
-            {isAiModalOpen && <AiProjectCreationModal onClose={() => setIsAiModalOpen(false)} onCreateProject={handleCreateProject} isCreating={isCreating} projectLimit={projectLimit} />}
+            {isChoiceModalOpen && (
+                <ProjectCreationChoiceModal 
+                    onClose={() => setIsChoiceModalOpen(false)} 
+                    onSelectManual={handleSelectManual}
+                    onSelectAI={handleSelectAI}
+                    userAccessLevel={userAccessLevel}
+                    projectLimit={projectLimit}
+                />
+            )}
+            {isManualModalOpen && (
+                <ManualProjectCreationModal 
+                    onClose={() => setIsManualModalOpen(false)} 
+                    onCreateProject={handleCreateProject}
+                    isCreating={isCreating}
+                    projectLimit={projectLimit}
+                    userAccessLevel={userAccessLevel}
+                />
+            )}
+            {isAiModalOpen && (
+                <AiProjectCreationModal 
+                    onClose={() => setIsAiModalOpen(false)} 
+                    onCreateProject={handleCreateProject} 
+                    isCreating={isCreating} 
+                    projectLimit={projectLimit} 
+                />
+            )}
             {isGapFinderModalOpen && <GapFinderModal onClose={() => setIsGapFinderModalOpen(false)} />}
 
             <Header 
@@ -226,29 +288,39 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                         )}
 
                         <div className="bg-white p-6 rounded-lg shadow-md">
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                                 <div>
-                                    <h2 className="text-xl font-semibold text-gray-800">Create a New Project</h2>
-                                    <div className="text-sm text-gray-500 mt-1">
-                                        Access Level: <span className={`font-medium ${userAccessLevel === 'premium' ? 'text-green-600' : 'text-blue-600'}`}>
-                                            {userAccessLevel === 'premium' ? 'Premium (Unlimited)' : 'Free (2/week)'}
-                                        </span>
-                                    </div>
-                                </div>
-                                {projectLimit.limit !== Infinity && (
-                                    <div className="text-sm text-gray-600">
-                                        {isCheckingLimit ? (
-                                            <span className="flex items-center">
-                                                <Spinner />
-                                                <span className="ml-2">Checking limit...</span>
+                                    <h2 className="text-xl font-semibold text-gray-800 mb-2">Your Projects</h2>
+                                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                                        <span className="font-medium">
+                                            Access Level: <span className={`font-semibold ${userAccessLevel === 'premium' ? 'text-green-600' : 'text-blue-600'}`}>
+                                                {userAccessLevel === 'premium' ? 'Premium' : 'Free'}
                                             </span>
-                                        ) : (
-                                            <span>
-                                                {projectLimit.currentCount}/{projectLimit.limit} projects created this week
+                                        </span>
+                                        {projectLimit.limit !== Infinity && (
+                                            <span className="text-gray-500">
+                                                {isCheckingLimit ? (
+                                                    <span className="flex items-center">
+                                                        <Spinner />
+                                                        <span className="ml-2">Checking...</span>
+                                                    </span>
+                                                ) : (
+                                                    <span>
+                                                        {projectLimit.currentCount}/{projectLimit.limit} this week
+                                                    </span>
+                                                )}
                                             </span>
                                         )}
                                     </div>
-                                )}
+                                </div>
+                                <button 
+                                    onClick={handleCreateProjectClick}
+                                    disabled={isCreating || (userAccessLevel === 'free' && !projectLimit.canCreate)}
+                                    className="group inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-[#39d0c4] px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:bg-[#32c3b5] disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:shadow-md"
+                                >
+                                    <FolderPlusIcon className="h-5 w-5 transition-transform group-hover:scale-110" />
+                                    <span>{(userAccessLevel === 'free' && !projectLimit.canCreate) ? 'Limit Reached' : 'Create Project'}</span>
+                                </button>
                             </div>
                             
                             {!projectLimit.canCreate && userAccessLevel === 'free' && (
@@ -269,82 +341,9 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                                 </div>
                             )}
                             
-                            {/* Debug buttons - remove in production */}
-                            {/* <div className="mb-4 space-x-4">
-                                <button 
-                                    onClick={async () => {
-                                        console.log('Current project limit state:', projectLimit);
-                                        console.log('User access level:', userAccessLevel);
-                                        console.log('User ID:', userId);
-                                        await debugWeeklyLimit(userId, userAccessLevel);
-                                    }}
-                                    className="text-xs text-gray-500 hover:text-gray-700 underline"
-                                >
-                                    Debug: Check Weekly Limit
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        testWeekCalculation();
-                                    }}
-                                    className="text-xs text-gray-500 hover:text-gray-700 underline"
-                                >
-                                    Test: Week Calculation
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        console.log('Current project limit before manual refresh:', projectLimit);
-                                        checkWeeklyProjectLimit(userId, userAccessLevel).then(limitInfo => {
-                                            console.log('Manual refresh result:', limitInfo);
-                                            setProjectLimit(limitInfo);
-                                        });
-                                    }}
-                                    className="text-xs text-gray-500 hover:text-gray-700 underline"
-                                >
-                                    Refresh: Project Limit
-                                </button>
-                            </div> */}
-                            
-                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">1. Create Manually</label>
-                                    <div className="mt-1 flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            value={newProjectName} 
-                                            onChange={(e) => setNewProjectName(e.target.value)} 
-                                            onKeyDown={handleKeyDown} 
-                                            placeholder="Enter project name..." 
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-                                            disabled={userAccessLevel === 'free' && !projectLimit.canCreate}
-                                        />
-                                        <button 
-                                            onClick={() => handleCreateProject(newProjectName)} 
-                                            disabled={isCreating || !newProjectName.trim() || (userAccessLevel === 'free' && !projectLimit.canCreate)} 
-                                            className="inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-gray-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-700 disabled:bg-gray-300"
-                                        >
-                                            <FolderPlusIcon className="h-5 w-5" />
-                                            {(userAccessLevel === 'free' && !projectLimit.canCreate) ? 'Limit Reached' : 'Create'}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">2. Generate from Research Idea</label>
-                                    <div className="mt-1">
-                                        <button 
-                                            onClick={() => setIsAiModalOpen(true)} 
-                                            disabled={isCreating || (userAccessLevel === 'free' && !projectLimit.canCreate)} 
-                                            className="w-full inline-flex items-center justify-center gap-x-2 rounded-md border border-transparent bg-main px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"
-                                        >
-                                            <SparklesIcon className="h-5 w-5" />
-                                            {(userAccessLevel === 'free' && !projectLimit.canCreate) ? 'Limit Reached' : 'Generate with AI'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
-                        <div className="mt-8">
-                            <h2 className="text-xl font-semibold text-gray-800">Your Projects</h2>
+                        <div className="mt-6">
                             {isLoading ? (
                                 <div className="flex justify-center items-center mt-4"><Spinner /><p className="ml-2">Loading projects...</p></div>
                             ) : projects.length === 0 ? (
