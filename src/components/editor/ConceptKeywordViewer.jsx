@@ -113,27 +113,38 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                     <div className="space-y-3">
                                         {concept.keywords.map((kw, i) => (
                                             <div key={i} className="flex items-center gap-x-3 p-3 bg-gray-50 rounded-lg">
-                                                <button 
-                                                    onClick={() => handleKeywordToggle(concept.id, 'keywords', i)} 
+                                                {/* Checkbox to toggle keyword */}
+                                                <input
+                                                    type="checkbox"
+                                                    checked={kw.active}
+                                                    onChange={() => handleKeywordToggle(concept.id, 'keywords', i)}
+                                                    className="h-5 w-5 text-main border-gray-300 rounded focus:ring-main cursor-pointer"
+                                                />
+                                                
+                                                <div 
                                                     onContextMenu={(e) => showMenu(e, [{ 
                                                         label: 'Find Synonyms', 
                                                         icon: <BookOpenIcon className="h-4 w-4" />, 
                                                         action: () => findSynonyms(kw.term, { conceptId: concept.id, type: 'keywords' }) 
                                                     }])} 
                                                     className={cn(
-                                                        'flex-1 text-left px-3 py-2 rounded border transition-colors',
+                                                        'flex-1 text-left px-3 py-2 rounded border transition-colors cursor-text',
                                                         kw.active 
                                                             ? 'bg-white border-main shadow-sm' 
                                                             : 'bg-gray-100 border-gray-200 text-gray-500 line-through'
                                                     )}
                                                 >
                                                     {kw.term}
-                                                </button>
+                                                </div>
                                                 
                                                 <select
                                                     value={kw.searchField || 4}
                                                     onChange={(e) => handleSearchFieldChange(concept.id, 'keywords', i, e.target.value)}
-                                                    className="px-2 py-1 text-sm border border-gray-300 rounded bg-white"
+                                                    disabled={!kw.active}
+                                                    className={cn(
+                                                        "px-2 py-1 text-sm border border-gray-300 rounded",
+                                                        kw.active ? "bg-white cursor-pointer" : "bg-gray-100 cursor-not-allowed text-gray-400"
+                                                    )}
                                                 >
                                                     {getSearchFieldOptions().map(option => (
                                                         <option key={option.value} value={option.value}>
@@ -164,15 +175,22 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                     <div className="space-y-3">
                                         {concept.controlled_vocabulary.map((vocab, i) => (
                                             <div key={i} className="flex items-center gap-x-3 p-3 bg-gray-50 rounded-lg">
-                                                <button 
-                                                    onClick={() => handleKeywordToggle(concept.id, 'controlled_vocabulary', i)}
+                                                {/* Checkbox to toggle controlled vocabulary */}
+                                                <input
+                                                    type="checkbox"
+                                                    checked={vocab.active}
+                                                    onChange={() => handleKeywordToggle(concept.id, 'controlled_vocabulary', i)}
+                                                    className="h-5 w-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500 cursor-pointer"
+                                                />
+                                                
+                                                <div 
                                                     onContextMenu={(e) => showMenu(e, [{ 
                                                         label: 'Find Synonyms', 
                                                         icon: <BookOpenIcon className="h-4 w-4"/>, 
                                                         action: () => findSynonyms(vocab.term, {conceptId: concept.id, type: 'controlled_vocabulary'}) 
                                                     }])}
                                                     className={cn(
-                                                        'flex-1 text-left px-3 py-2 rounded border transition-colors',
+                                                        'flex-1 text-left px-3 py-2 rounded border transition-colors cursor-text',
                                                         vocab.active 
                                                             ? 'bg-white border-teal-300 text-teal-800 shadow-sm' 
                                                             : 'bg-gray-100 border-gray-200 text-gray-500 line-through'
@@ -180,7 +198,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                                 >
                                                     <span>{vocab.term}</span>
                                                     <span className="ml-2 text-xs opacity-70">({vocab.type})</span>
-                                                </button>
+                                                </div>
                                                 
                                                 {/* Controlled vocabulary terms don't need search field selection as they use their specific syntax */}
                                                 <div className="px-2 py-1 text-xs text-gray-500 bg-gray-200 rounded">
