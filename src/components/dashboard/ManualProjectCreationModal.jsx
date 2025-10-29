@@ -5,12 +5,24 @@ import Spinner from '../common/Spinner.jsx';
 
 function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, projectLimit, userAccessLevel }) {
     const [projectName, setProjectName] = useState('');
+    const [projectType, setProjectType] = useState('');
+    const [discipline, setDiscipline] = useState('');
+    const [outcomesNeeded, setOutcomesNeeded] = useState('');
+    const [outcomesNotNeeded, setOutcomesNotNeeded] = useState('');
+    const [questionTemplate, setQuestionTemplate] = useState('');
 
     const handleCreate = () => {
         if (!projectName.trim()) {
             return;
         }
-        onCreateProject(projectName);
+        const extraData = {
+            projectType: projectType.trim() || null,
+            discipline: discipline.trim() || null,
+            outcomesNeeded: outcomesNeeded.trim() || null,
+            outcomesNotNeeded: outcomesNotNeeded.trim() || null,
+            questionTemplate: questionTemplate || null,
+        };
+        onCreateProject(projectName, extraData);
     };
 
     const handleKeyDown = (event) => {
@@ -21,7 +33,7 @@ function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, proj
 
     return (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[9999] flex justify-center items-center p-4">
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl animate-in fade-in zoom-in duration-200">
                 <div className="p-6 bg-[#39d0c4] rounded-t-2xl">
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -42,7 +54,8 @@ function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, proj
                     </div>
                 </div>
 
-                <div className="p-8">
+                {/* Body: scrollable content */}
+                <div className="p-8 overflow-y-auto max-h-[65vh]">
                     <div>
                         <label htmlFor="project-name" className="block text-sm font-semibold text-gray-700 mb-3">
                             Project Name
@@ -60,6 +73,83 @@ function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, proj
                         <p className="mt-2 text-xs text-gray-500">Press Enter to create</p>
                     </div>
 
+                    <div className="mt-6 grid grid-cols-1 gap-5">
+                        <div>
+                            <label htmlFor="project-type" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Project Type (optional)
+                            </label>
+                            <input
+                                type="text"
+                                id="project-type"
+                                value={projectType}
+                                onChange={(e) => setProjectType(e.target.value)}
+                                placeholder="e.g., Systematic Review, RCT, Meta-analysis"
+                                className="block w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm shadow-sm transition-all duration-200 focus:border-[#39d0c4] focus:ring-2 focus:ring-[#39d0c4]/20 focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="discipline" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Discipline (optional)
+                            </label>
+                            <input
+                                type="text"
+                                id="discipline"
+                                value={discipline}
+                                onChange={(e) => setDiscipline(e.target.value)}
+                                placeholder="e.g., Cardiology, Public Health, Psychology"
+                                className="block w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm shadow-sm transition-all duration-200 focus:border-[#39d0c4] focus:ring-2 focus:ring-[#39d0c4]/20 focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="outcomes-needed" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Outcomes Needed (optional)
+                            </label>
+                            <textarea
+                                id="outcomes-needed"
+                                rows={2}
+                                value={outcomesNeeded}
+                                onChange={(e) => setOutcomesNeeded(e.target.value)}
+                                placeholder="List outcomes/parameters you need (comma-separated or free text)"
+                                className="block w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm shadow-sm transition-all duration-200 focus:border-[#39d0c4] focus:ring-2 focus:ring-[#39d0c4]/20 focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="outcomes-not-needed" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Outcomes/Parameters Not Needed (optional)
+                            </label>
+                            <textarea
+                                id="outcomes-not-needed"
+                                rows={2}
+                                value={outcomesNotNeeded}
+                                onChange={(e) => setOutcomesNotNeeded(e.target.value)}
+                                placeholder="List outcomes/parameters you want to exclude"
+                                className="block w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm shadow-sm transition-all duration-200 focus:border-[#39d0c4] focus:ring-2 focus:ring-[#39d0c4]/20 focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="question-template" className="block text-sm font-semibold text-gray-700 mb-2">
+                                Question Template (optional)
+                            </label>
+                            <select
+                                id="question-template"
+                                value={questionTemplate}
+                                onChange={(e) => setQuestionTemplate(e.target.value)}
+                                className="block w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 text-sm shadow-sm transition-all duration-200 focus:border-[#39d0c4] focus:ring-2 focus:ring-[#39d0c4]/20 focus:outline-none bg-white"
+                            >
+                                <option value="">Select a template</option>
+                                <option value="PICO">PICO</option>
+                                <option value="SPIDER">SPIDER</option>
+                                <option value="CIMO">CIMO</option>
+                                <option value="ECLIPSE">ECLIPSE</option>
+                                <option value="SPICE">SPICE</option>
+                            </select>
+                        </div>
+                    </div>
+
                     {userAccessLevel === 'free' && !projectLimit?.canCreate && (
                         <div className="mt-4 p-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
                             ⚠️ You have reached your weekly project creation limit
@@ -67,6 +157,7 @@ function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, proj
                     )}
                 </div>
 
+                {/* Sticky footer */}
                 <div className="p-6 bg-gray-50 border-t rounded-b-2xl flex justify-end gap-3">
                     <button
                         onClick={onClose}
