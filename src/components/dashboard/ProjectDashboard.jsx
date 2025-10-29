@@ -124,7 +124,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                 createdAt: serverTimestamp(),
                 color: color,
                 researchQuestion: researchQuestion,
-                initialStep: pico ? 2 : 1, // Start at step 2 if PICO is pre-filled
+                initialStep: 1,
                 userId: userId,
                 userName: user?.displayName || user?.email || 'Unknown User',
                 userEmail: user?.email || null
