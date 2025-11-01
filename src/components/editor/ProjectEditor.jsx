@@ -14,6 +14,7 @@ import { callGeminiAPI } from '../../api/geminiApi.js';
 import { getPubmedCount, searchPubmed } from '../../api/pubmedApi.js';
 import { getElsevierCount, searchElsevier } from '../../api/elsevierApi.js';
 import { getCoreCount, searchCore } from '../../api/coreApi.js';
+import { getSemanticScholarCount, searchSemanticScholar } from '../../api/semanticScholarApi.js';
 
 // Child Components & Modals
 import PicoBuilder from './PicoBuilder.jsx';
@@ -439,6 +440,30 @@ Return ONLY the JSON object with no additional text.`;
         if (!concepts || concepts.length === 0) return '';
         const { syntax } = DB_CONFIG[dbKey];
     
+        // Special handling for Semantic Scholar: keep it short and natural-language-like
+        if (dbKey === 'semanticScholar') {
+            // Prefer concept names; fallback to first active keyword per concept
+            const phrases = [];
+            concepts.forEach(concept => {
+                const name = (concept.name || '').trim();
+                if (name) phrases.push(`"${name}"`);
+                if (phrases.length >= 6) return; // cap early if enough terms collected
+                const firstKeyword = (concept.keywords || []).find(k => k && k.active && (k.term || '').trim());
+                if (firstKeyword) phrases.push(`"${firstKeyword.term.trim()}"`);
+            });
+            // De-duplicate and cap to a safe number of phrases
+            const deduped = Array.from(new Set(phrases)).slice(0, 6);
+            let finalQuery = deduped.join(' ');
+
+            // Add negative terms using minus style
+            const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
+            if (activeNegative.length > 0) {
+                const ssNegatives = activeNegative.map(k => `-"${k}"`).join(' ');
+                finalQuery = `${finalQuery}${finalQuery ? ' ' : ''}${ssNegatives}`.trim();
+            }
+            return finalQuery;
+        }
+
         const parts = [];
         
         concepts.forEach(concept => {
@@ -487,9 +512,15 @@ Return ONLY the JSON object with no additional text.`;
     
         const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
         if (activeNegative.length > 0) {
-            const negativePart = activeNegative.map(k => `"${k}"`).join(' OR ');
-            if (finalQuery) {
-               finalQuery += ` ${syntax.not} (${negativePart})`;
+            if (dbKey === 'semanticScholar') {
+                // Semantic Scholar supports minus for exclusion
+                const ssNegatives = activeNegative.map(k => `-"${k}"`).join(' ');
+                finalQuery = `${finalQuery}${finalQuery ? ' ' : ''}${ssNegatives}`.trim();
+            } else {
+                const negativePart = activeNegative.map(k => `"${k}"`).join(' OR ');
+                if (finalQuery) {
+                   finalQuery += ` ${syntax.not} (${negativePart})`;
+                }
             }
         }
         return finalQuery.trim();
@@ -508,6 +539,7 @@ Return ONLY the JSON object with no additional text.`;
                 if (dbKey === 'pubmed') return await getPubmedCount(query);
                 if (dbKey === 'scopus' || dbKey === 'embase') return await getElsevierCount(dbKey, query);
                 if (dbKey === 'core') return await getCoreCount(query);
+                if (dbKey === 'semanticScholar') return await getSemanticScholarCount(query);
                 return 'N/A';
             });
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: count, loading: false } }));
@@ -561,6 +593,7 @@ Return ONLY the JSON object with no additional text.`;
                     if (dbKey === 'pubmed') return await searchPubmed(query, retmax);
                     if (dbKey === 'scopus' || dbKey === 'embase') return await searchElsevier(dbKey, query, retmax);
                     if (dbKey === 'core') return await searchCore(query, retmax);
+                    if (dbKey === 'semanticScholar') return await searchSemanticScholar(query, retmax);
                     return { total: 0, data: [] };
                 });
                 
@@ -612,6 +645,7 @@ Return ONLY the JSON object with no additional text.`;
                 if (dbKey === 'pubmed') return await searchPubmed(query, pageSize, offset);
                 if (dbKey === 'scopus' || dbKey === 'embase') return await searchElsevier(dbKey, query, pageSize, offset);
                 if (dbKey === 'core') return await searchCore(query, pageSize, offset);
+                if (dbKey === 'semanticScholar') return await searchSemanticScholar(query, pageSize, offset);
                 return { total: 0, data: [] };
             }, { tries: 5, baseDelayMs: 1000, factor: 3 });
             

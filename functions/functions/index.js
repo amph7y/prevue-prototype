@@ -181,6 +181,81 @@ exports.searchElsevier = functions.https.onRequest({
   });
 });
 
+// Semantic Scholar proxy to avoid CORS and centralize rate limiting
+exports.searchSemanticScholar = functions.https.onRequest({
+  secrets: ["SEMANTIC_SCHOLAR_API_KEY"]
+}, (req, res) => {
+  return cors(req, res, async () => {
+    try {
+      const { query, limit = 25, offset = 0, fields } = req.body || {};
+
+      if (!query) {
+        return res.status(400).json({ error: 'Query is required' });
+      }
+
+      const defaultFields = 'paperId,title,authors,year,citationCount,referenceCount,isOpenAccess,venue,abstract,url,fieldsOfStudy,externalIds';
+      const params = new URLSearchParams({
+        query: query,
+        fields: fields || defaultFields,
+        limit: String(limit),
+        offset: String(offset)
+      });
+
+      const url = `https://api.semanticscholar.org/graph/v1/paper/search?${params.toString()}`;
+      const headers = { 'Accept': 'application/json' };
+      // if (process.env.SEMANTIC_SCHOLAR_API_KEY) {
+      //   headers['x-api-key'] = process.env.SEMANTIC_SCHOLAR_API_KEY;
+      // }
+
+      const maxAttempts = 30;
+      let attempt = 0;
+      let apiResponse = null;
+      let last429 = false;
+      while (attempt < maxAttempts) {
+        logger.info('SemanticScholar proxy request', { query, limit, offset, url, attempt });
+        apiResponse = await fetch(url, { headers });
+        if (apiResponse.status !== 429) {
+          last429 = false;
+          break;
+        }
+        last429 = true;
+        const retryAfterHeader = apiResponse.headers.get('retry-after');
+        const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+        const baseDelayMs = !Number.isNaN(retryAfterSeconds)
+          ? retryAfterSeconds * 1000
+          : Math.min(60000, 2000 * Math.pow(2, attempt));
+        const jitter = Math.floor(Math.random() * 1000);
+        logger.warn('SemanticScholar returned 429, will retry', { attempt, baseDelayMs, jitter });
+        await new Promise(r => setTimeout(r, baseDelayMs + jitter));
+        attempt += 1;
+      }
+
+      if (last429 && apiResponse && apiResponse.status === 429) {
+        // Give up and forward the 429. Never send a status 500 for this.
+        const errorText = await apiResponse.text().catch(() => '');
+        return res.status(429).json({ error: `Upstream 429 Too Many Requests: ${errorText}` });
+      }
+
+      if (!apiResponse) {
+        return res.status(500).json({ error: 'Semantic Scholar proxy: could not get any response' });
+      }
+      if (!apiResponse.ok) {
+        const errorText = await apiResponse.text().catch(() => '');
+        throw new Error(`Semantic Scholar API error: ${apiResponse.status} ${apiResponse.statusText} ${errorText}`);
+      }
+
+      const data = await apiResponse.json();
+      logger.info('SemanticScholar proxy response', { status: apiResponse.status, total: data?.total, count: data?.data?.length });
+      res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
+      res.json(data);
+    } catch (error) {
+      console.error('Semantic Scholar API error (proxy):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+});
+
+
 // Admin functions for user management
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');

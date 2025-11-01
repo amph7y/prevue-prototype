@@ -8,6 +8,7 @@ import { XCircleIcon, SparklesIcon, ArrowPathIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
 import { cn } from '../../utils/cn.js';
 import { getCoreCount } from '../../api/coreApi.js';
+import { getSemanticScholarCount } from '../../api/semanticScholarApi.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
 
@@ -73,6 +74,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
             if (modalData.dbKey === 'pubmed') count = await getPubmedCount(editedQuery);
             else if (modalData.dbKey === 'scopus' || modalData.dbKey === 'embase') count = await getElsevierCount(modalData.dbKey, editedQuery);
             else if (modalData.dbKey === 'core') count = await getCoreCount(editedQuery);
+            else if (modalData.dbKey === 'semanticScholar') count = await getSemanticScholarCount(editedQuery);
             setTempCount(count);
             toast.success("Count refreshed!");
         } catch (err) {
