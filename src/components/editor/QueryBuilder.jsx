@@ -9,7 +9,7 @@ import logger from '../../utils/logger.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
 
-const DISABLED_DBS = ['semanticScholar', 'googleScholar', 'embase'];
+const DISABLED_DBS = ['googleScholar', 'embase'];
 
 const QueryBuilder = ({ state, actions }) => {
     const { userAccessLevel } = useAuth();
