@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header.jsx';
 import { CONTACT_US_GOOGLE_FORM_CONFIG, RATE_LIMIT_CONFIG, validateContactForm } from '../../config/contactUs.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import SignupModal from '../../components/common/SignupModal.jsx';
 
 function LandingPage({ onGetStarted,onGoToAdmin}) {
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', message: '' });
@@ -9,6 +10,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmitTime, setLastSubmitTime] = useState(null);
   const { isAuthenticated, isAdmin } = useAuth();
+  const [isSignupOpen, setIsSignupOpen] = useState(false);
 
   const workflowSectionRef = useRef(null);
   const [workflowVisible, setWorkflowVisible] = useState(false);
@@ -25,6 +27,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
   const testimonialsRef = useRef(null);
   const teamRef = useRef(null);
   const contactRef = useRef(null);
+  const pricingRef = useRef(null);
 
 
   // Navigation functions
@@ -38,6 +41,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
       'who-is-it-for': whoIsItForRef,
       'how-it-works': howItWorksRef,
       testimonials: testimonialsRef,
+      pricing: pricingRef,
       team: teamRef,
       contact: contactRef
     };
@@ -199,47 +203,41 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                 </button>
               )}
             <button
-              onClick={onGetStarted}
+              onClick={() => onGetStarted(true)}
               className="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main"
             >
-              Test Prototype
+              Join the List
             </button>
           </div>
           }
           onGoToAdmin={onGoToAdmin}
         />
 
-        {/* Navigation Menu */}
+{/* Navigation Menu */}
         <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center space-x-8">
-                <div className="flex space-x-6">
-                  {[
-                    { id: 'hero', label: 'Home' },
-                    { id: 'features', label: 'Features' },
-                    { id: 'better-way', label: 'Better Way' },
-                    { id: 'before-after', label: 'Before/After' },
-                    { id: 'focus-matters', label: 'Focus' },
-                    { id: 'who-is-it-for', label: 'Who Is It For' },
-                    { id: 'how-it-works', label: 'How It Works' },
-                    { id: 'testimonials', label: 'Testimonials' },
-                    { id: 'team', label: 'Team' },
-                    { id: 'contact', label: 'Contact' }
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => scrollToSection(item.id)}
-                      className={`text-sm font-medium transition-colors duration-200 ${
-                        activeSection === item.id
-                          ? 'text-main border-b-2 border-main'
-                          : 'text-gray-600 hover:text-main'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex items-center justify-center h-16">
+              <div className="flex space-x-6">
+                {[
+                  { id: 'hero', label: 'Home' },
+                  { id: 'features', label: 'Features' },
+                  { id: 'pricing', label: 'Pricing' },
+                  { id: 'how-it-works', label: 'How It Works' },
+                  { id: 'team', label: 'Team' },
+                  { id: 'contact', label: 'Contact' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => scrollToSection(item.id)}
+                    className={`text-sm font-medium transition-colors duration-200 ${
+                      activeSection === item.id
+                        ? 'text-main border-b-2 border-main'
+                        : 'text-gray-600 hover:text-main'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -247,22 +245,24 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
 
         {/* Hero Section */}
         <main ref={heroRef} data-section="hero" className="relative isolate">
-          <div className="hero-bg">
+        <div className="hero-bg">
             <div className="mx-auto max-w-4xl px-6 pt-24 pb-16 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-28 text-center">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-text-dark">
                 <span className="block gradient-text">3 STEPS is all you need…</span>
-                <span className="block mt-2 text-3xl sm:text-4xl lg:text-5xl">To Revolutionize how you search & screen literature.</span>
               </h1>
+              <p className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-bold text-text-dark">
+                To Revolutionize how you search & screen literature.
+              </p>
               <p className="mt-6 text-lg sm:text-xl leading-8 text-gray-700">
-                PreVue is an AI-powered tool that builds optimized, multi-database queries for systematic reviews — helping you find what matters, faster.
-                <strong className="text-secondary"> Save weeks of manual screening</strong> with smart query refinement and relevance filtering.
+                AI-powered systematic review tool that builds optimized queries and filters results.
+                <strong className="text-secondary"> Save weeks of screening time.</strong>
               </p>
               <div className="mt-10 flex items-center justify-center gap-x-6">
                 <button
-                  onClick={onGetStarted}
+                  onClick={() => setIsSignupOpen(true)}
                   className="rounded-md bg-main px-8 py-4 text-lg font-semibold text-white shadow-glow hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main transition-transform transform hover:scale-105"
                 >
-                  Launch the Prototype
+                  Join the List
                 </button>
               </div>
               <p className="mt-4 text-sm text-gray-500">You are invited to test an early-stage prototype.</p>
@@ -321,7 +321,174 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
               </div>
             </div>
           </div>
-          <div ref={betterWayRef} data-section="better-way" className="bg-white relative py-16 sm:py-24">
+          {/* Pricing Section */}
+          <div ref={pricingRef} data-section="pricing" className="bg-white py-24 sm:py-32">
+            <div className="mx-auto max-w-7xl px-6 lg:px-8">
+              <div className="mx-auto max-w-2xl text-center">
+                <h2 className="text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">Simple Plans, Real Value</h2>
+                <p className="mt-4 text-lg leading-8 text-gray-600">
+                  Choose the plan that fits your research needs
+                </p>
+              </div>
+              
+              <div className="mt-16 flex justify-center">
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12 max-w-5xl w-full">
+                  {/* Free Plan */}
+                  <div className="relative rounded-2xl border border-gray-200 bg-white p-8 shadow-sm hover:shadow-lg transition-shadow">
+                    <h3 className="text-2xl font-bold text-text-dark">Free</h3>
+                    <p className="mt-4 flex items-baseline gap-x-2">
+                      <span className="text-5xl font-bold tracking-tight text-text-dark">$0</span>
+                      <span className="text-base font-semibold leading-7 tracking-wide text-gray-600">/month</span>
+                    </p>
+                    <p className="mt-6 text-base leading-7 text-gray-600">Perfect for testing and exploring PreVue</p>
+                    <ul className="mt-8 space-y-3 text-sm leading-6 text-gray-600">
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>2</strong> projects</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>AI Concept & Keywords Generation</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Multi-DB Query Generation (<strong>2 databases</strong>)</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Multi-DB Article Search (<strong>2 databases</strong>)</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Deduplication</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Export (limited to 50% of total count)</span>
+                      </li>
+                    </ul>
+                    <button
+                      onClick={() => setIsSignupOpen(true)}
+                      className="mt-8 block w-full rounded-md bg-gray-600 px-3.5 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
+                    >
+                      Get Started Free
+                    </button>
+                  </div>
+
+                  {/* Premium Plan */}
+                  <div className="relative rounded-2xl border-2 border-main bg-white p-8 shadow-xl">
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2">
+                      <span className="inline-flex rounded-full bg-main px-4 py-1 text-sm font-semibold text-white">
+                        Most Popular
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-bold text-text-dark">Premium</h3>
+                    <p className="mt-4 flex items-baseline gap-x-2">
+                      <span className="text-5xl font-bold tracking-tight text-text-dark">$14.99</span>
+                      <span className="text-base font-semibold leading-7 tracking-wide text-gray-600">/month</span>
+                    </p>
+                    <p className="text-sm text-gray-500">$11.99/month billed annually</p>
+                    <p className="mt-6 text-base leading-7 text-gray-600">For serious researchers and teams</p>
+                    <ul className="mt-8 space-y-3 text-sm leading-6 text-gray-600">
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>Unlimited</strong> projects</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>Gap Finder</strong> - Identify research gaps</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>Generate Project with AI</strong></span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>AI Concept & Keywords Generation</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Multi-DB Query Generation (<strong>All databases</strong>)</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>AI Query Refiner</strong></span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>Live Article Count</strong></span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Multi-DB Article Search (<strong>All databases</strong>)</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span>Deduplication</span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>Unlimited Export</strong></span>
+                      </li>
+                      <li className="flex gap-x-3">
+                        <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                        </svg>
+                        <span><strong>7 months early access</strong> to new features</span>
+                      </li>
+                    </ul>
+                    <button
+                      onClick={() => setIsSignupOpen(true)}
+                      className="mt-8 block w-full rounded-md bg-main px-3.5 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main"
+                    >
+                      Upgrade to Premium
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-12 text-center">
+                <p className="text-sm text-gray-600">
+                  Annual pricing: <strong>$149.90/year</strong> ($119.90 discounted) • Save 20% with annual billing
+                </p>
+              </div>
+            </div>
+          </div>
+          
+           {/* better Way Section */}
+          <div ref={betterWayRef} data-section="better-way" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
                 <div className="lg:text-left">
@@ -373,7 +540,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Before and After Section */}
-          <div ref={beforeAfterRef} data-section="before-after" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
+          <div ref={beforeAfterRef} data-section="before-after" className="bg-white relative py-16 sm:py-24">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-2xl lg:text-center">
                 <p className="mt-2 text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">Transform Your Workflow</p>
@@ -437,7 +604,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Focus on What Matters Section */}
-          <div ref={focusMattersRef} data-section="focus-matters" className="bg-white py-16 sm:py-24">
+          <div ref={focusMattersRef} data-section="focus-matters" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-3xl text-center">
                 <h2 className="text-base font-semibold leading-7 text-main">FOCUS ON WHAT MATTERS</h2>
@@ -462,7 +629,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Who is it for Section */}
-          <div ref={whoIsItForRef} data-section="who-is-it-for" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
+          <div ref={whoIsItForRef} data-section="who-is-it-for" className="bg-white relative py-16 sm:py-24">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-3xl text-center">
                 <h2 className="text-base font-semibold leading-7 text-main">BUILT FOR RESEARCHERS, BY RESEARCHERS</h2>
@@ -495,7 +662,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* How it works */}
-          <div ref={howItWorksRef} data-section="how-it-works" className="bg-white py-16 sm:py-24">
+          <div ref={howItWorksRef} data-section="how-it-works" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
             <div className="mx-auto max-w-4xl px-6 lg:px-8 text-center">
               <h2 className="text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">A Radically Simple Workflow</h2>
               <p className="mt-4 text-lg text-gray-700">A streamlined process for superior results.</p>
@@ -523,7 +690,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
           </div>
 
           {/* Testimonials Section */}
-          <div ref={testimonialsRef} data-section="testimonials" className="bg-fill angled-top-white py-24 sm:py-32">
+          <div ref={testimonialsRef} data-section="testimonials" className="bg-white relative py-16 sm:py-24">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
               <div className="mx-auto max-w-xl text-center">
                 <h2 className="text-lg font-semibold leading-8 tracking-tight text-main">Testimonials</h2>
@@ -735,10 +902,10 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                 Be Among the<strong className="text-main"> FIRST</strong> to Explore <strong className="text-main">PreVue</strong>
               </p>
               <button
-                onClick={onGetStarted}
+                onClick={() => setIsSignupOpen(true)}
                 className="mt-8 inline-block rounded-md bg-main px-8 py-4 text-lg font-semibold text-white shadow-glow hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main transition-transform transform hover:scale-105"
               >
-                Launch the Prototype
+                Join the List
               </button>
             </div>
           </div>
@@ -901,6 +1068,11 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
             </div>
           </div>
         </main>
+
+      {/* Signup Modal */}
+      {isSignupOpen && (
+        <SignupModal onClose={() => setIsSignupOpen(false)} />)
+      }
 
         {/* Footer */}
         <footer className="bg-text-dark">

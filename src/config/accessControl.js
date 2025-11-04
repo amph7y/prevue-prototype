@@ -16,8 +16,8 @@ export const ACCESS_LEVELS = {
         maxDatabases: Infinity,
         canSeeLiveCounts: true,
         maxProjectsPerWeek: Infinity,
-        canGenerateConceptsOncePerProject: true,
-        canGenerateKeywordsOncePerProject: true
+        canGenerateConceptsOncePerProject: false,
+        canGenerateKeywordsOncePerProject: false
     }
     
 };

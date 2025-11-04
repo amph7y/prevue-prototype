@@ -6,6 +6,9 @@ import { UNIFIED_SEARCH_FIELDS } from '../../config/dbConfig.js';
 const ConceptKeywordViewer = ({ concepts, actions }) => {
     const { setConcepts, showMenu, findSynonyms } = actions;
     const [manageModal, setManageModal] = useState({ open: false, conceptId: null, type: 'keywords' });
+    const [internalConceptListModal, setInternalConceptListModal] = useState(false);
+    const conceptListModal = actions?.conceptListModal ?? internalConceptListModal;
+    const setConceptListModal = actions?.setConceptListModal ?? setInternalConceptListModal;
 
     const getSearchFieldOptions = () => {
         return Object.entries(UNIFIED_SEARCH_FIELDS).map(([value, label]) => ({
@@ -86,6 +89,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
     const MAX_VISIBLE_CHIPS = 8;
 
     const openManageModal = (concept, type) => {
+        setConceptListModal(false);
         setManageModal({ open: true, conceptId: concept.id, type });
     };
 
@@ -174,47 +178,29 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                                 {/* Keywords Section (compact chips) */}
                                 <div>
-                                    <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center mb-2">
                                         <h4 className="font-medium text-gray-700 flex items-center">
                                             <span className="w-2 h-2 bg-main rounded-full mr-2"></span>
                                             Keywords
                                         </h4>
-                                        {concept.keywords?.length > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => openManageModal(concept, 'keywords')}
-                                                className="px-2 py-1 text-xs font-semibold rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                                            >
-                                                Manage
-                                            </button>
-                                        )}
                                     </div>
                                     <p className="text-xs text-gray-500 mb-2 mt-1">
-                                        💡 Click <strong>Manage</strong> to customize, edit, and configure your keywords
+                                        💡 Use <strong>Edit Keywords</strong> to customize and configure keywords
                                     </p>
                                     {renderChips(concept.keywords, concept, 'keywords')}
                                 </div>
 
                                 {/* Controlled Vocabulary Section (compact chips) */}
                                 <div>
-                                    <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center mb-2">
                                         <h4 className="font-medium text-gray-700 flex items-center">
                                             <span className="w-2 h-2 bg-teal-500 rounded-full mr-2"></span>
                                             Controlled Vocabulary
                                         </h4>
-                                        {concept.controlled_vocabulary?.length > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => openManageModal(concept, 'controlled_vocabulary')}
-                                                className="px-2 py-1 text-xs font-semibold rounded-md bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                                            >
-                                                Manage
-                                            </button>
-                                        )}
                                     </div>
-                                    <p className="text-xs text-gray-500 mb-2 mt-1">
-                                        💡 Click <strong>Manage</strong> to customize, edit, and configure your controlled vocabulary terms
-                                    </p>
+                                    {/* <p className="text-xs text-gray-500 mb-2 mt-1">
+                                        💡 Use <strong>Manage All Concepts</strong> to customize and configure controlled vocabulary
+                                    </p> */}
                                     {renderChips(concept.controlled_vocabulary, concept, 'controlled_vocabulary')}
                                 </div>
                             </div>
@@ -222,6 +208,53 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                     );
                 })}
             </div>
+
+            {/* Concept List Modal */}
+            {conceptListModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setConceptListModal(false)}></div>
+                    <div className="relative bg-white w-full max-w-2xl mx-4 rounded-lg shadow-lg">
+                        <div className="px-5 py-4 border-b flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">Select a Concept to Manage</h3>
+                            <button onClick={() => setConceptListModal(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+                        </div>
+                        <div className="p-5 max-h-[70vh] overflow-auto">
+                            <div className="space-y-3">
+                                {concepts.filter(c => c.keywords?.length > 0).map((concept) => (
+                                    <div key={concept.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div>
+                                                <h4 className="font-semibold text-gray-800">{concept.name}</h4>
+                                                <p className="text-xs text-gray-500 mt-0.5">{getCategoryLabel(concept.type)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => openManageModal(concept, 'keywords')}
+                                                className="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-main/10 border border-main text-main hover:bg-main/20 transition-colors"
+                                            >
+                                                Edit Keywords ({concept.keywords?.length || 0})
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => openManageModal(concept, 'controlled_vocabulary')}
+                                                className="flex-1 px-3 py-2 text-sm font-medium rounded-md bg-teal-50 border border-teal-300 text-teal-700 hover:bg-teal-100 transition-colors"
+                                            >
+                                                Edit Vocabulary ({concept.controlled_vocabulary?.length || 0})
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="px-5 py-3 border-t flex justify-end">
+                            <button onClick={() => setConceptListModal(false)} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {manageModal.open && manageModal.conceptId && (() => {
                 const activeConcept = concepts.find(c => c.id === manageModal.conceptId);
                 if (!activeConcept) return null;
