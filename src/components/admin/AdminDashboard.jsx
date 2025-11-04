@@ -14,9 +14,14 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
   const [users, setUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('users');
   const [error, setError] = useState(null);
+  const [signups, setSignups] = useState([]);
+  const [showClearModal, setShowClearModal] = useState(false);
+
 
   useEffect(() => {
     loadUsers();
+    const saved = JSON.parse(localStorage.getItem('joinListSignups') || '[]');
+    setSignups(saved);
   }, []);
 
   const loadUsers = async () => {
@@ -161,6 +166,16 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
             >
               Statistics
             </button>
+            <button
+              onClick={() => setActiveTab('signups')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'signups'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Join List Signups
+            </button>
           </nav>
         </div>
       </div>
@@ -177,6 +192,131 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
           />
         )}
         {activeTab === 'stats' && <AdminStats users={users} />}
+        {activeTab === 'signups' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <h3 className="text-lg font-semibold text-gray-900">Join the List Signups</h3>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    try {
+                      const raw = localStorage.getItem('joinListSignups') || '[]';
+                      const data = JSON.parse(raw);
+                      const headers = ['Name','Email','Phone','Notify','SubmittedAt'];
+                      const rows = data.map(item => [
+                        item.name || '',
+                        item.email || '',
+                        item.phone || '',
+                        item.notify ? 'Yes' : 'No',
+                        item.submittedAt || ''
+                      ]);
+                      const csv = [headers, ...rows]
+                        .map(r => r
+                          .map(field => {
+                            const v = String(field ?? '');
+                            const needsQuote = /[",\n]/.test(v);
+                            return needsQuote ? '"' + v.replace(/"/g, '""') + '"' : v;
+                          })
+                          .join(','))
+                        .join('\n');
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'prevue_join_list.csv';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (e) {
+                      console.error('Export failed', e);
+                      toast.error('Failed to export signups.');
+                    }
+                  }}
+                  className="rounded-md bg-main px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark"
+                >
+                  Download Signups (CSV)
+                </button>
+
+                {/* Clear Button */}
+                <button
+                  onClick={() => setShowClearModal(true)}
+                  className="rounded-md bg-gray-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500"
+                >
+                  Clear Signups
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="mt-6 overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notify</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {signups.length > 0 ? (
+                    signups.map((r, idx) => (
+                      <tr key={idx}>
+                        <td className="px-4 py-2 text-sm text-gray-900">{r.name}</td>
+                        <td className="px-4 py-2 text-sm text-gray-900">{r.email}</td>
+                        <td className="px-4 py-2 text-sm text-gray-900">{r.phone}</td>
+                        <td className="px-4 py-2 text-sm text-gray-900">{r.notify ? 'Yes' : 'No'}</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">{r.submittedAt}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="text-center py-6 text-gray-500 text-sm">
+                        No signups found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Clear Confirmation Modal */}
+            {showClearModal && (
+              <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+                <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Clear All Signups</h4>
+                  <p className="text-sm text-gray-600 mb-5">
+                    Are you sure you want to clear all collected signups? This action cannot be undone.
+                  </p>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowClearModal(false)}
+                      className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 text-sm hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        try {
+                          localStorage.removeItem('joinListSignups');
+                          setSignups([]);
+                          setShowClearModal(false);
+                          toast.success('All signups cleared successfully');
+                        } catch (e) {
+                          console.error('Clear failed', e);
+                          toast.error('Failed to clear signups.');
+                        }
+                      }}
+                      className="px-4 py-2 rounded-md bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

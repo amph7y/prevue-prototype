@@ -146,7 +146,7 @@ const CreateUserModal = ({ onClose, onCreateUser }) => {
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   errors.password ? 'border-red-500' : 'border-gray-300'
                 }`}
-                placeholder="Minimum 6 characters"
+                placeholder="Minimum 8 characters"
               />
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password}</p>

@@ -27,6 +27,7 @@ const DefineStep = ({ state, actions }) => {
   const isFreshProject = !hasConcepts || !hasKeywords;
   
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
+  const [conceptListModal, setConceptListModal] = useState(false);
 
   const handleGenerateConcepts = async () => {
     // Log concept generation initiation
@@ -330,19 +331,30 @@ const DefineStep = ({ state, actions }) => {
             <div className="mt-10">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Review & Configure Keywords</h2>
-                <button
-                  type="button"
-                  onClick={handleEditConcepts}
-                  className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-                >
-                  <PencilIcon className="h-4 w-4" />
-                  Edit Concepts
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleEditConcepts}
+                    className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    Edit Concepts
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConceptListModal(true)}
+                    className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    Edit Keywords
+                  </button>
+                </div>
               </div>
               
               <ConceptKeywordViewer
                 concepts={concepts}
-                actions={{ setConcepts, showMenu, findSynonyms }}
+                actions={{ setConcepts, showMenu, findSynonyms, conceptListModal, setConceptListModal }}
               />
             </div>
           )}
