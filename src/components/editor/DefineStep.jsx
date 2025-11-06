@@ -6,7 +6,7 @@ import Spinner from '../common/Spinner.jsx';
 import logger from '../../utils/logger.js';
 
 const DefineStep = ({ state, actions }) => {
-  const { researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, capabilities } = state;
+  const { researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities } = state;
   const {
     setResearchQuestion,
     setConcepts,
@@ -115,8 +115,7 @@ const DefineStep = ({ state, actions }) => {
             <label className="block text-lg font-semibold">Research Question</label>
           </div>
           <div className="mb-4 p-3 text-sm text-gray-600 bg-gray-50 rounded-md">
-            <strong>Note:</strong> You can only generate concepts and keywords once per project. 
-            If you need to regenerate them, please create a new project.
+            <strong>Note:</strong> You can generate concepts and keywords up to {Number.isFinite(capabilities.maxConceptGenerationsPerProject) ? capabilities.maxConceptGenerationsPerProject : 'unlimited'} times per project.
           </div>
           <textarea 
             rows={3} 
@@ -129,7 +128,7 @@ const DefineStep = ({ state, actions }) => {
             <button
               type="button"
               onClick={handleGenerateConcepts}
-              disabled={isLoading || !researchQuestion.trim() || (conceptsGenerated && capabilities.canGenerateConceptsOncePerProject)}
+              disabled={isLoading || !researchQuestion.trim() || (Number.isFinite(capabilities.maxConceptGenerationsPerProject) && conceptsGenerationCount >= capabilities.maxConceptGenerationsPerProject)}
               className="inline-flex items-center rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50"
             >
               {isLoading ? (
@@ -137,7 +136,7 @@ const DefineStep = ({ state, actions }) => {
                   <Spinner />
                   <span className="ml-2">Generating Concepts...</span>
                 </>
-              ) : conceptsGenerated && capabilities.canGenerateConceptsOncePerProject ? (
+              ) : (Number.isFinite(capabilities.maxConceptGenerationsPerProject) && conceptsGenerationCount >= capabilities.maxConceptGenerationsPerProject) ? (
                 <>
                   <MainSparklesIcon className="h-5 w-5 mr-2" />
                   <span>Concepts Already Generated</span>
@@ -150,9 +149,9 @@ const DefineStep = ({ state, actions }) => {
               )}
             </button>
           </div>
-          {conceptsGenerated && capabilities.canGenerateConceptsOncePerProject && (
+          {(Number.isFinite(capabilities.maxConceptGenerationsPerProject) && conceptsGenerationCount >= capabilities.maxConceptGenerationsPerProject) && (
             <div className="mt-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
-              Concepts can only be generated once per project. You can edit the generated concepts or create a new project.
+              Concepts can only be generated up to {capabilities.maxConceptGenerationsPerProject} times per project.
             </div>
           )}
         </div>
@@ -181,7 +180,7 @@ const DefineStep = ({ state, actions }) => {
             <button
               type="button"
               onClick={handleGenerateKeywordsForConcepts}
-              disabled={isGeneratingKeywords || (keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject)}
+              disabled={isGeneratingKeywords || (Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject)}
               className="inline-flex items-center rounded-md border border-transparent bg-main px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50 disabled:cursor-not-allowed"
             >
               {isGeneratingKeywords ? (
@@ -189,7 +188,7 @@ const DefineStep = ({ state, actions }) => {
                   <Spinner />
                   <span className="ml-2">Generating Keywords...</span>
                 </>
-              ) : keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject ? (
+              ) : (Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject) ? (
                 <>
                   <MainSparklesIcon className="h-6 w-6 mr-3" />
                   <span>Keywords Already Generated</span>
@@ -202,9 +201,9 @@ const DefineStep = ({ state, actions }) => {
               )}
             </button>
           </div>
-          {keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject && (
+          {(Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject) && (
             <div className="mt-4 text-sm text-amber-600 bg-amber-50 p-3 rounded-md text-center">
-              Keywords can only be generated once per project. You can edit the generated keywords or create a new project.
+              Keywords can only be generated up to {capabilities.maxKeywordGenerationsPerProject} times per project.
             </div>
           )}
         </>
@@ -299,7 +298,7 @@ const DefineStep = ({ state, actions }) => {
             <button
               type="button"
               onClick={handleGenerateKeywordsForConcepts}
-              disabled={isGeneratingKeywords || (keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject)}
+            disabled={isGeneratingKeywords || (Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject)}
               className="inline-flex items-center rounded-md border border-transparent bg-main px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50 disabled:cursor-not-allowed"
             >
               {isGeneratingKeywords ? (
@@ -307,7 +306,7 @@ const DefineStep = ({ state, actions }) => {
                   <Spinner />
                   <span className="ml-2">Generating Keywords...</span>
                 </>
-              ) : keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject ? (
+              ) : (Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject) ? (
                 <>
                   <MainSparklesIcon className="h-6 w-6 mr-3" />
                   <span>Keywords Already Generated</span>
@@ -320,9 +319,9 @@ const DefineStep = ({ state, actions }) => {
               )}
             </button>
           </div>
-          {keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject && (
+          {(Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject) && (
             <div className="mt-4 text-sm text-amber-600 bg-amber-50 p-3 rounded-md text-center">
-              Keywords can only be generated once per project. You can edit the generated keywords or create a new project.
+              Keywords can only be generated up to {capabilities.maxKeywordGenerationsPerProject} times per project.
             </div>
           )}
 

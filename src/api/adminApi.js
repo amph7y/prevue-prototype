@@ -67,6 +67,14 @@ export const adminApi = {
     });
   },
 
+  // Backfill Firestore users schema for existing Auth users
+  backfillUsersSchema: async () => {
+    return makeAuthenticatedRequest('backfillUsersSchema', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
   // Activity Logs Management
   getActivityLogs: async (options = {}) => {
     return logApi.getActivityLogs(options);

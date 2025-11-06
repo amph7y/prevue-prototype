@@ -16,6 +16,7 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
   const [error, setError] = useState(null);
   const [signups, setSignups] = useState([]);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [backfillInfo, setBackfillInfo] = useState(null);
 
 
   useEffect(() => {
@@ -98,6 +99,24 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error('Failed to delete user: ' + error.message);
+    }
+  };
+
+  const handleBackfillUsersSchema = async () => {
+    try {
+      const result = await adminApi.backfillUsersSchema();
+      setBackfillInfo(result);
+      if ((result.created || 0) > 0 || (result.updated || 0) > 0) {
+        toast.success(`Backfill complete: created ${result.created || 0}, updated ${result.updated || 0}`);
+      } else if ((result.errors || 0) > 0) {
+        toast.error(`Backfill had ${result.errors} errors. See details below.`);
+      } else {
+        toast("No changes were needed.");
+      }
+      loadUsers();
+    } catch (error) {
+      console.error('Error backfilling users schema:', error);
+      toast.error('Failed to backfill users: ' + error.message);
     }
   };
 
@@ -189,6 +208,7 @@ const AdminDashboard = ({ onBackToLanding,onGoToAdmin }) => {
             onUserCreate={handleUserCreate}
             onUserDelete={handleUserDelete}
             onRefresh={loadUsers}
+            onBackfillSchema={handleBackfillUsersSchema}
           />
         )}
         {activeTab === 'stats' && <AdminStats users={users} />}

@@ -1,10 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { getCountries, getCountryCallingCode, isValidPhoneNumber } from 'libphonenumber-js';
+
+// Helper function to get a list of all country codes and labels
+const getCountryCodeList = () => {
+  const countryCodes = getCountries()
+    .filter(country => country !== 'IL'); // Remove Israel (IL)
+  
+  return countryCodes.map(country => ({
+    isoCode: country,
+    code: `+${getCountryCallingCode(country)}`,
+    label: country,
+  }));
+};
+
 
 function SignupModal({ onClose }) {
+  const allCountryCodes = useMemo(() => getCountryCodeList(), []);
+  const defaultIsoCode = 'QA';
+  const defaultCallingCode = `+${getCountryCallingCode(defaultIsoCode)}`;
+  
   const [form, setForm] = useState({
     name: '',
     email: '',
-    countryCode: '+974', // default
+    countryIsoCode: defaultIsoCode, 
     phone: '',
     notify: true
   });
@@ -12,78 +30,71 @@ function SignupModal({ onClose }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Common country codes
-  const countryCodes = [
-    { code: '+1', label: 'USA/Canada' },
-    { code: '+44', label: 'UK' },
-    { code: '+20', label: 'Egypt' },
-    { code: '+961', label: 'Lebanon' },
-    { code: '+971', label: 'UAE' },
-    { code: '+974', label: 'Qatar' },
-    { code: '+91', label: 'India' },
-    { code: '+61', label: 'Australia' },
-    { code: '+33', label: 'France' },
-    { code: '+49', label: 'Germany' }
-  ];
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const validatePhone = (countryCode, phone) => {
-    // Remove spaces/dashes
-    const cleanPhone = phone.replace(/[\s-]/g, '');
-    const regexByCountry = {
-      '+1': /^[2-9]\d{9}$/, // US/Canada - 10 digits, cannot start with 0 or 1
-      '+44': /^7\d{9}$/, // UK - usually starts with 7 and 10 digits total (mobile)
-      '+20': /^1[0-9]{9}$/, // Egypt - mobile numbers start with 1 and have 10 digits
-      '+961': /^\d{7,8}$/, // Lebanon - 7 or 8 digits
-      '+971': /^5\d{8}$/, // UAE - mobile starts with 5 and has 9 digits total
-      '+974': /^\d{8}$/, // Qatar - 8 digits
-      '+91': /^[6-9]\d{9}$/, // India - 10 digits, starts 6-9
-      '+61': /^4\d{8}$/, // Australia - starts with 4 (mobile)
-      '+33': /^[67]\d{8}$/, // France - starts with 6 or 7
-      '+49': /^1\d{9,10}$/ // Germany - starts with 1, 10–11 digits
-    };
 
-    const regex = regexByCountry[countryCode];
-    return regex ? regex.test(cleanPhone) : /^\d{7,15}$/.test(cleanPhone);
+  const validatePhone = (countryIsoCode, phone) => {
+    try {
+      return isValidPhoneNumber(phone, countryIsoCode);
+    } catch (e) {
+      return false;
+    }
   };
 
   const validate = () => {
-    if (!form.name.trim()) return 'Please enter your full name.';
-    if (!form.email.trim()) return 'Please enter your email.';
-    const emailOk = /.+@.+\..+/.test(form.email.trim());
+    const { name, email, countryIsoCode, phone } = form;
+
+    if (!name.trim()) return 'Please enter your full name.';
+    if (!email.trim()) return 'Please enter your email.';
+    
+    const emailOk = /.+@.+\..+/.test(email.trim());
     if (!emailOk) return 'Please enter a valid email.';
-    if (!form.phone.trim()) return 'Please enter your phone number.';
-    if (!validatePhone(form.countryCode, form.phone))
-      return `Please enter a valid phone number for ${form.countryCode}.`;
+    
+    if (!phone.trim()) return 'Please enter your phone number.';
+    
+    
+    if (!validatePhone(countryIsoCode, phone)) {
+      const selectedCountry = allCountryCodes.find(c => c.isoCode === countryIsoCode);
+      const callingCode = selectedCountry ? selectedCountry.code : 'the selected country';
+      return `Please enter a valid phone number for ${callingCode}.`;
+    }
+    
     return '';
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
+
     const v = validate();
     if (v) {
       setError(v);
       return;
     }
+    
     setError('');
     setIsSubmitting(true);
+    
+    const selectedCountry = allCountryCodes.find(c => c.isoCode === form.countryIsoCode);
+    const callingCode = selectedCountry ? selectedCountry.code : '';
+
     try {
       const raw = localStorage.getItem('joinListSignups') || '[]';
       const list = JSON.parse(raw);
       const record = {
         name: form.name.trim(),
         email: form.email.trim(),
-        phone: `${form.countryCode} ${form.phone.trim()}`,
+        phone: `${callingCode} ${form.phone.trim()}`,
         notify: !!form.notify,
         submittedAt: new Date().toISOString()
       };
+      
       list.push(record);
       localStorage.setItem('joinListSignups', JSON.stringify(list));
+      
       setSuccess('Thanks! You have been added to the list.');
       setTimeout(() => {
         setSuccess('');
@@ -149,15 +160,16 @@ function SignupModal({ onClose }) {
             </label>
             <div className="mt-2.5 flex">
               <select
-                id="countryCode"
-                name="countryCode"
-                value={form.countryCode}
+                id="countryIsoCode"
+                name="countryIsoCode"
+                value={form.countryIsoCode}
                 onChange={handleChange}
                 className="rounded-l-md border-0 bg-gray-100 px-2 py-2 text-sm text-gray-800 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-main"
               >
-                {countryCodes.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} ({c.label})
+                {/* Dynamically populate ALL countries */}
+                {allCountryCodes.map((c) => (
+                  <option key={c.isoCode} value={c.isoCode}>
+                    {c.code} ({c.isoCode})
                   </option>
                 ))}
               </select>
@@ -169,6 +181,7 @@ function SignupModal({ onClose }) {
                 onChange={handleChange}
                 required
                 className="flex-1 rounded-r-md border-0 px-3.5 py-2 text-text-dark shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-main sm:text-sm sm:leading-6"
+                placeholder={`e.g. ${form.countryIsoCode === 'QA' ? '55551234' : ''}`}
               />
             </div>
           </div>
@@ -222,3 +235,6 @@ function SignupModal({ onClose }) {
 }
 
 export default SignupModal;
+
+
+

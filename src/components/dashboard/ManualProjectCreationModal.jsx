@@ -152,7 +152,7 @@ function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, proj
 
                     {userAccessLevel === 'free' && !projectLimit?.canCreate && (
                         <div className="mt-4 p-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
-                            ⚠️ You have reached your weekly project creation limit
+                            ⚠️ You have reached your lifetime project creation limit
                         </div>
                     )}
                 </div>
@@ -197,7 +197,7 @@ ManualProjectCreationModal.propTypes = {
         canCreate: PropTypes.bool.isRequired,
         currentCount: PropTypes.number.isRequired,
         limit: PropTypes.number.isRequired,
-        resetDate: PropTypes.instanceOf(Date).isRequired
+        resetDate: PropTypes.instanceOf(Date)
     }),
     userAccessLevel: PropTypes.string.isRequired
 };
