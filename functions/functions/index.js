@@ -323,12 +323,12 @@ exports.getUsers = functions.https.onRequest((req, res) => {
         const userData = doc.data();
         users.push({
           id: doc.id,
-          email: userData.email,
-          displayName: userData.displayName,
+          email: userData.email || '',
+          displayName: userData.displayName || '',
           role: userData.role || 'user',
           accessLevel: userData.accessLevel || 'free',
-          createdAt: userData.createdAt,
-          lastLoginAt: userData.lastLoginAt,
+          createdAt: userData.createdAt || null,
+          lastLoginAt: userData.lastLoginAt || null,
           isActive: userData.isActive !== false
         });
       });
@@ -483,6 +483,101 @@ exports.deleteUser = functions.https.onRequest((req, res) => {
       res.json({ success: true });
     } catch (error) {
       console.error('Delete user error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+});
+
+
+
+// Admin-only backfill to enforce Firestore users schema for existing Auth users
+exports.backfillUsersSchema = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
+    try {
+      await verifyAdminAccess(req); 
+      const results = { created: 0, updated: 0, checked: 0, errors: 0, errorSamples: [] };
+
+      
+      const safeTimestamp = (date) => {
+  if (date instanceof Date && !isNaN(date.getTime())) {
+    return date; 
+  }
+  return null;
+};
+
+
+      const processPage = async (nextPageToken) => {
+        const listResult = await admin.auth().listUsers(1000, nextPageToken);
+
+        for (const userRecord of listResult.users) {
+          try {
+            results.checked += 1;
+            const uid = userRecord.uid;
+            const userDocRef = db.collection('users').doc(uid);
+            const userDoc = await userDocRef.get();
+
+            const authEmail = userRecord.email || '';
+            const authDisplayName = userRecord.displayName || '';
+
+            const createdAtDate = userRecord.metadata?.creationTime
+              ? new Date(userRecord.metadata.creationTime)
+              : null;
+            const lastLoginDate = userRecord.metadata?.lastSignInTime
+              ? new Date(userRecord.metadata.lastSignInTime)
+              : null;
+              
+            const createdAt = safeTimestamp(createdAtDate);
+            const lastLoginAt = safeTimestamp(lastLoginDate);
+
+            if (!userDoc.exists) {
+              await userDocRef.set({
+                email: authEmail,
+                displayName: authDisplayName,
+                role: 'user',
+                accessLevel: 'free',
+                createdAt: createdAt || admin.firestore.Timestamp.now(),
+                lastLoginAt: lastLoginAt || null,
+                isActive: true,
+                verifyEmail: !!userRecord.emailVerified
+              }, { merge: true });
+              results.created += 1;
+            } else {
+              const data = userDoc.data() || {};
+              const updateData = {};
+
+              if (!data.email && authEmail) updateData.email = authEmail;
+              if (!data.displayName && authDisplayName) updateData.displayName = authDisplayName;
+              if (!data.role) updateData.role = 'user';
+              if (!data.accessLevel) updateData.accessLevel = 'free';
+              if (!data.createdAt) updateData.createdAt = createdAt || admin.firestore.Timestamp.now();
+              if (!data.lastLoginAt && lastLoginAt) updateData.lastLoginAt = lastLoginAt;
+              if (data.isActive === undefined) updateData.isActive = true;
+              if (data.verifyEmail === undefined) updateData.verifyEmail = !!userRecord.emailVerified;
+
+              if (Object.keys(updateData).length > 0) {
+                await userDocRef.set(updateData, { merge: true });
+                results.updated += 1;
+              }
+            }
+          } catch (e) {
+            console.error('Backfill error for user', userRecord.uid, e);
+            results.errors += 1;
+            if (results.errorSamples.length < 10) {
+              results.errorSamples.push({ uid: userRecord.uid, message: e?.message || String(e) });
+            }
+          }
+        }
+
+        if (listResult.pageToken) {
+          await processPage(listResult.pageToken);
+        }
+      };
+
+      await processPage();
+
+      res.json({ success: true, ...results });
+    } catch (error) {
+      console.error('Backfill users schema error:', error);
       res.status(500).json({ error: error.message });
     }
   });

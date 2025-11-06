@@ -6,18 +6,18 @@ export const ACCESS_LEVELS = {
         canGenerateConceptsAndKeywords: true,
         maxDatabases: 2,
         canSeeLiveCounts: false,
-        maxProjectsPerWeek: 2,
-        canGenerateConceptsOncePerProject: true,
-        canGenerateKeywordsOncePerProject: true
+        maxProjectsPerLifetime: 2,
+        maxConceptGenerationsPerProject: 2,
+        maxKeywordGenerationsPerProject: 2
     },
     premium: {
         canUseAiProject: true,
         canGenerateConceptsAndKeywords: true,
         maxDatabases: Infinity,
         canSeeLiveCounts: true,
-        maxProjectsPerWeek: Infinity,
-        canGenerateConceptsOncePerProject: false,
-        canGenerateKeywordsOncePerProject: false
+        maxProjectsPerLifetime: Infinity,
+        maxConceptGenerationsPerProject: Infinity,
+        maxKeywordGenerationsPerProject: Infinity
     }
     
 };

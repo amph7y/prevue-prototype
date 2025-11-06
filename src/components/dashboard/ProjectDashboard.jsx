@@ -13,7 +13,7 @@ import ProjectCreationChoiceModal from './ProjectCreationChoiceModal.jsx';
 import ManualProjectCreationModal from './ManualProjectCreationModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import Header from '../common/Header.jsx';
-import { checkWeeklyProjectLimit, formatResetDate, debugWeeklyLimit, testWeekCalculation, recordProjectCreationEvent } from '../../utils/projectLimits.js';
+import { checkLifetimeProjectLimit, formatResetDate, debugLifetimeLimit, testLifetimeCalculation, recordProjectCreationEvent } from '../../utils/projectLimits.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
 function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin }) {
@@ -48,7 +48,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             setIsCheckingLimit(true);
             
             try {
-                const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
+                const limitInfo = await checkLifetimeProjectLimit(userId, userAccessLevel);
                 setProjectLimit(limitInfo);
             } catch (error) {
                 console.error('Error checking project limit:', error);
@@ -69,7 +69,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             
             setIsCheckingLimit(true);
             try {
-                const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
+                const limitInfo = await checkLifetimeProjectLimit(userId, userAccessLevel);
                 setProjectLimit(limitInfo);
             } catch (error) {
                 console.error('Error checking project limit:', error);
@@ -110,8 +110,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
         
         // Check project limit before creating
         if (!projectLimit.canCreate) {
-            const resetDate = formatResetDate(projectLimit.resetDate);
-            toast.error(`You have reached your weekly project limit (${projectLimit.currentCount}/${projectLimit.limit}). Limit resets on ${resetDate}.`);
+            toast.error(`You have reached your lifetime project limit (${projectLimit.currentCount}/${projectLimit.limit}).`);
             return;
         }
         
@@ -134,12 +133,12 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
             // Log project creation
             await logger.logProjectCreate(userId, docRef.id, name);
             
-            // Record project creation event for weekly limit tracking
+            // Record project creation event for lifetime limit tracking
             await recordProjectCreationEvent(userId, docRef.id, name);
             
             // Re-check the project limit to ensure accuracy
             try {
-                const limitInfo = await checkWeeklyProjectLimit(userId, userAccessLevel);
+                const limitInfo = await checkLifetimeProjectLimit(userId, userAccessLevel);
                 setProjectLimit(limitInfo);
             } catch (error) {
                 console.error('Error re-checking project limit:', error);
@@ -306,7 +305,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                                                     </span>
                                                 ) : (
                                                     <span>
-                                                        {projectLimit.currentCount}/{projectLimit.limit} this week
+                                                        {projectLimit.currentCount}/{projectLimit.limit} lifetime
                                                     </span>
                                                 )}
                                             </span>
@@ -325,18 +324,16 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                             
                             {!projectLimit.canCreate && userAccessLevel === 'free' && (
                                 <div className="mb-4 p-3 text-sm text-amber-700 bg-amber-50 rounded-md">
-                                    You have reached your weekly project creation limit ({projectLimit.currentCount}/{projectLimit.limit} projects created this week). 
-                                    Your limit will reset on {formatResetDate(projectLimit.resetDate)}.
+                                    You have reached your lifetime project creation limit ({projectLimit.currentCount}/{projectLimit.limit}).
                                 </div>
                             )}
                             
                             {projectLimit.canCreate && projectLimit.limit !== Infinity && projectLimit.currentCount > 0 && userAccessLevel === 'free' && (
                                 <div className="mb-4 p-3 text-sm text-blue-700 bg-blue-50 rounded-md">
-                                    You have created {projectLimit.currentCount} of {projectLimit.limit} projects this week. 
-                                    Your limit will reset on {formatResetDate(projectLimit.resetDate)}.
+                                    You have created {projectLimit.currentCount} of {projectLimit.limit} projects (lifetime).
                                     <br />
                                     <span className="text-xs text-gray-600 mt-1 block">
-                                        Note: The limit is based on total projects created this week, not current projects.
+                                        Note: Deleting projects does not increase your remaining allowance.
                                     </span>
                                 </div>
                             )}

@@ -55,7 +55,7 @@ function ProjectCreationChoiceModal({ onClose, onSelectManual, onSelectAI, userA
                                 </p>
                                 {!canCreate && (
                                     <p className="text-xs text-amber-600 mt-2 font-medium">
-                                        ✗ You have reached your weekly project limit
+                                        ✗ You have reached your lifetime project limit
                                     </p>
                                 )}
                             </div>
@@ -102,7 +102,7 @@ function ProjectCreationChoiceModal({ onClose, onSelectManual, onSelectAI, userA
                                 )}
                                 {!canCreate && canUseAI && (
                                     <p className="text-xs text-amber-600 mt-2 font-medium">
-                                        ✗ You have reached your weekly project limit
+                                        ✗ You have reached your lifetime project limit
                                     </p>
                                 )}
                             </div>
@@ -132,7 +132,7 @@ ProjectCreationChoiceModal.propTypes = {
         canCreate: PropTypes.bool.isRequired,
         currentCount: PropTypes.number.isRequired,
         limit: PropTypes.number.isRequired,
-        resetDate: PropTypes.instanceOf(Date).isRequired
+        resetDate: PropTypes.instanceOf(Date)
     })
 };
 

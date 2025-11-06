@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import CreateUserModal from './CreateUserModal.jsx';
 import UserTable from './UserTable.jsx';
 
-const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRefresh }) => {
+const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRefresh, onBackfillSchema }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAccess, setFilterAccess] = useState('all');
@@ -93,8 +93,8 @@ const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRef
             </select>
           </div>
 
-          {/* Refresh Button */}
-          <div className="flex items-end">
+          {/* Actions */}
+          <div className="flex items-end gap-2">
             <button
               onClick={onRefresh}
               className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
@@ -104,6 +104,16 @@ const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRef
               </svg>
               Refresh
             </button>
+            {/* <button
+              onClick={onBackfillSchema}
+              className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+              title="Create or fix missing user documents in Firestore"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m4-4H8" />
+              </svg>
+              Backfill User Schema
+            </button> */}
           </div>
         </div>
       </div>

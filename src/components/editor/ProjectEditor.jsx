@@ -61,9 +61,11 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     
-    // Track generation state for restrictions
+    // Track generation state and counts for restrictions
     const [conceptsGenerated, setConceptsGenerated] = useState(false);
     const [keywordsGenerated, setKeywordsGenerated] = useState(false);
+    const [conceptsGenerationCount, setConceptsGenerationCount] = useState(0);
+    const [keywordsGenerationCount, setKeywordsGenerationCount] = useState(0);
 
     const [selectedDBs, setSelectedDBs] = useState(() => {
         // Implemented DBs
@@ -110,6 +112,8 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 // Load generation state
                 setConceptsGenerated(data.conceptsGenerated || false);
                 setKeywordsGenerated(data.keywordsGenerated || false);
+                setConceptsGenerationCount(Number(data.conceptsGenerationCount || (data.conceptsGenerated ? 1 : 0)));
+                setKeywordsGenerationCount(Number(data.keywordsGenerationCount || (data.keywordsGenerated ? 1 : 0)));
             }
         });
     }, [project.id, userId]);
@@ -125,12 +129,14 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 keywordStyle, 
                 conceptsGenerated,
                 keywordsGenerated,
+                conceptsGenerationCount,
+                keywordsGenerationCount,
                 lastSaved: serverTimestamp() 
             };
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
         return () => clearTimeout(debounceTimeout.current);
-    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, project.id, userId]);
+    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId]);
 
     useEffect(() => {
         if (step === 2) {
@@ -172,9 +178,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const handleGeneratePicoFromQuestion = async () => {
         if (!researchQuestion.trim()) return toast.error('Please enter a research question first.');
         
-        // Check if concepts have already been generated for this project
-        if (conceptsGenerated && capabilities.canGenerateConceptsOncePerProject) {
-            return toast.error('Concepts can only be generated once per project. Please edit existing concepts or create a new project.');
+        // Check if concepts generation exceeds limit for this project
+        const maxConcepts = capabilities.maxConceptGenerationsPerProject;
+        if (Number.isFinite(maxConcepts) && conceptsGenerationCount >= maxConcepts) {
+            return toast.error(`Concepts can only be generated up to ${maxConcepts} times per project.`);
         }
         
         setIsLoading(true);
@@ -247,6 +254,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                         
             setConcepts(generatedConcepts);
             setConceptsGenerated(true);
+            setConceptsGenerationCount(prev => prev + 1);
             
             // Log concept generation
             await logger.logFeatureUsed(userId, 'concept_generation', {
@@ -301,9 +309,10 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             return toast.error('No concepts defined. Please generate PICO concepts first.');
         }
         
-        // Check if keywords have already been generated for this project
-        if (keywordsGenerated && capabilities.canGenerateKeywordsOncePerProject) {
-            return toast.error('Keywords can only be generated once per project. Please edit existing keywords or create a new project.');
+        // Check if keywords generation exceeds limit for this project
+        const maxKeywords = capabilities.maxKeywordGenerationsPerProject;
+        if (Number.isFinite(maxKeywords) && keywordsGenerationCount >= maxKeywords) {
+            return toast.error(`Keywords can only be generated up to ${maxKeywords} times per project.`);
         }
         
         setIsLoading(true);
@@ -376,6 +385,7 @@ Return ONLY the JSON object with no additional text.`;
             
             setConcepts(updatedConcepts);
             setKeywordsGenerated(true);
+            setKeywordsGenerationCount(prev => prev + 1);
             
             // Log keyword generation
             await logger.logFeatureUsed(userId, 'keyword_generation', {
@@ -771,7 +781,7 @@ Return ONLY the JSON object with no additional text.`;
                         <div className="mb-8">{renderStepIndicator()}</div>
                         {step === 1 && (
                             <DefineStep
-                                state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, capabilities }}
+                                state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities }}
                                 actions={{ setResearchQuestion, setConcepts, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleGeneratePicoFromQuestion, setStep, showMenu, findSynonyms, onBackToDashboard }}
                             />
                         )}

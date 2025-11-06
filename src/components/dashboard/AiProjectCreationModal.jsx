@@ -21,7 +21,7 @@ function AiProjectCreationModal({ onClose, onCreateProject, isCreating, projectL
             return toast.error('AI project generation is a premium feature.');
         }
         if (userAccessLevel === 'free' && !projectLimit?.canCreate) {
-            return toast.error('You have reached your weekly project limit.');
+            return toast.error('You have reached your lifetime project limit.');
         }
         if (!researchTopic.trim()) return toast.error("Please enter a research topic.");
         setIsLoadingAI(true);
@@ -168,7 +168,7 @@ AiProjectCreationModal.propTypes = {
         canCreate: PropTypes.bool.isRequired,
         currentCount: PropTypes.number.isRequired,
         limit: PropTypes.number.isRequired,
-        resetDate: PropTypes.instanceOf(Date).isRequired
+        resetDate: PropTypes.instanceOf(Date)
     })
 };
 
