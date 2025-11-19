@@ -102,7 +102,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
         return () => unsubscribe();
     }, [userId]);
 
-    const handleCreateProject = async (name, pico = null, researchQuestion = '') => {
+    const handleCreateProject = async (name, pico = null, researchQuestion = '', extraData = null) => {
         if (!name.trim()) {
             toast.error("Project name cannot be empty.");
             return;
@@ -126,7 +126,15 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                 initialStep: 1,
                 userId: userId,
                 userName: user?.displayName || user?.email || 'Unknown User',
-                userEmail: user?.email || null
+                userEmail: user?.email || null,
+                // Store extra project metadata if provided
+                ...(extraData && {
+                    projectType: extraData.projectType || null,
+                    discipline: extraData.discipline || null,
+                    outcomesNeeded: extraData.outcomesNeeded || null,
+                    outcomesNotNeeded: extraData.outcomesNotNeeded || null,
+                    questionTemplate: extraData.questionTemplate || null
+                })
             };
             const docRef = await addDoc(collection(db, projectsCollectionPath), newProjectData);
             

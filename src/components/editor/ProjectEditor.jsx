@@ -186,34 +186,172 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         
         setIsLoading(true);
         
-        const prompt = `
-        You are an expert in information retrieval and research database searching.
+        // Extract project data for the prompt
+        const projectType = project.projectType || '';
+        const discipline = project.discipline || '';
+        const desiredOutcomes = project.outcomesNeeded || '';
+        const undesiredOutcomes = project.outcomesNotNeeded || negativeKeywords.filter(k => k.trim() !== '').join(', ') || '';
+        const questionTemplate = project.questionTemplate || '';
         
-        Analyze the following research question and break it into its core search concepts 
-        (for example: Population, Intervention, Comparison, Outcome, or other relevant concepts).
+        const prompt = `You are an expert information specialist in academic information retrieval, systematic reviews, and database query design.
 
-        For each concept, provide up to 3 relevant search terms. Make sure the terms are different enough to provide wider search value.
+You are part of ReVue's AI engine, helping researchers build reproducible and context-aware search strategies.
 
-        Example:
+ 
 
-        Research Question: "What is the effectiveness of mindfulness on anxiety in healthcare professionals?"
+Your objective:
 
-        Concepts:
-        - Population: "healthcare professionals"
-        - Intervention: "mindfulness"
-        - Outcome: "anxiety"
-        - Comparison: "usual care"
-                
-        Return ONLY valid JSON in the following format:
-        {
-          "concepts": [
-            { "name": "Concept Name", "terms": ["term1", "term2", "term3"] },
-            ...
-          ]
-        }
-        
-        Research Question: "${researchQuestion}"
-        `;
+1. Identify the key searchable concepts within a research question.
+
+2. Generate academically relevant, diverse search terms for each concept.
+
+3. Output ONLY valid JSON — no commentary or text outside JSON.
+
+ 
+
+The process occurs in two independent stages.
+
+ 
+
+===========================================================
+
+🔸 STAGE 1: CONCEPT EXTRACTION
+
+===========================================================
+
+ 
+
+Analyze the following research question and contextual details to identify its core searchable concepts.
+
+ 
+
+Use the provided question framework (if available) to label concepts appropriately.  
+
+If none is given, infer the most logical conceptual breakdown (e.g., PICO, SPIDER, CIMO, SPICE, PCC, or ECLIPSE).  
+
+Only include meaningful and specific concepts directly related to the research question — exclude generic words such as "effect," "impact," or "relationship."
+
+ 
+
+If contextual project details are available, use them to improve accuracy and relevance:
+
+- Project Type (study design): adapt the concept framing (e.g., "systematic review" → measurable outcomes and clear interventions).
+
+- Discipline: use domain-specific interpretation (e.g., "pharmacy" → clinical, pharmacological terminology).
+
+- Desired Outcomes: prioritize identifying or weighting concepts related to these outcomes.
+
+- Undesired Outcomes (exclusions): avoid including these in the extracted concepts.
+
+- Question Template: adapt structure accordingly (e.g., PICO → Population, Intervention, Comparison, Outcome).
+
+ 
+
+Do NOT use Project Title (it may be generic or irrelevant).  
+
+Do NOT fabricate missing data — only use what is provided.
+
+ 
+
+────────────────────────────
+
+Context:
+
+- Research Question: ${researchQuestion}
+
+- Project Type: ${projectType || '(optional)'}
+
+- Discipline: ${discipline || '(optional)'}
+
+- Desired Outcomes: ${desiredOutcomes || '(optional)'}
+
+- Undesired Outcomes: ${undesiredOutcomes || '(optional)'}
+
+- Question Template: ${questionTemplate || '(optional)'}
+
+────────────────────────────
+
+ 
+
+Return ONLY valid JSON in the following format:
+
+{
+
+  "concepts": [
+
+    { "name": "Concept Name", "value": "Extracted Concept" }
+
+  ]
+
+}
+
+ 
+
+────────────────────────────
+
+Example Input:
+
+{
+
+  "research_question": "What is the effectiveness of mindfulness-based therapy on anxiety among healthcare professionals?",
+
+  "project_type": "systematic review",
+
+  "discipline": "public health",
+
+  "desired_outcomes": ["reduction in anxiety", "mental wellbeing improvement"],
+
+  "undesired_outcomes": ["children", "animal studies"],
+
+  "question_template": "PICO"
+
+}
+
+ 
+
+Example Output:
+
+{
+
+  "concepts": [
+
+    { "name": "Population", "value": "healthcare professionals" },
+
+    { "name": "Intervention", "value": "mindfulness-based therapy" },
+
+    { "name": "Outcome", "value": "anxiety reduction" }
+
+  ]
+
+}
+
+ 
+
+===========================================================
+
+🔸 OUTPUT RULES
+
+===========================================================
+
+- Always output structured, valid JSON.
+
+- Never include explanations, commentary, or additional text outside JSON.
+
+- Maintain consistent key names exactly as shown.
+
+- If any optional detail (discipline, project type, outcomes) is missing, ignore it — do NOT infer or invent replacements.
+
+ 
+
+===========================================================
+
+🔸 REMINDER
+
+===========================================================
+
+Your role is to support reproducible academic research.  
+
+Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
                 
         try {
             const result = await callGeminiAPI(prompt);
@@ -222,7 +360,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             
             if (result.concepts && Array.isArray(result.concepts)) {
                 result.concepts.forEach((concept, index) => {
-                    if (concept.name && concept.terms && Array.isArray(concept.terms)) {
+                    if (concept.name && concept.value) {
                         // Determine concept type based on name or create custom type
                         let conceptType = 'custom';
                         const nameLower = concept.name.toLowerCase();
@@ -237,14 +375,12 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                             conceptType = 'outcome';
                         }
                         
-                        // Create concept with initial synonyms from the terms
-                        const [mainTerm, ...synonymTerms] = concept.terms;
-                        
+                        // Use the value as the main term
                         generatedConcepts.push({
                             id: `concept_${Date.now()}_${index}`,
-                            name: mainTerm || concept.name,
+                            name: concept.value,
                             type: conceptType,
-                            synonyms: synonymTerms.filter(term => term.trim() !== ''),
+                            synonyms: [],
                             keywords: [],
                             controlled_vocabulary: []
                         });
@@ -317,18 +453,44 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         
         setIsLoading(true);
         try {
+            // Extract project data for the prompt
+            const projectType = project.projectType || '';
+            const discipline = project.discipline || '';
+            const desiredOutcomes = project.outcomesNeeded || '';
+            const undesiredOutcomes = project.outcomesNotNeeded || negativeKeywords.filter(k => k.trim() !== '').join(', ') || '';
             
-            const conceptDescriptions = conceptsData.map(concept => {
-                const synonyms = concept.synonyms.filter(syn => syn.trim() !== '').join('; ');
-                const synonymText = synonyms ? ` (Synonyms: ${synonyms})` : '';
-                return `${concept.name}${synonymText}`;
+            // Prepare concepts in the format expected by STAGE 2
+            // We need to determine the concept name (label) from the concept type
+            const conceptsForPrompt = conceptsData.map(concept => {
+                // Determine concept label based on type
+                let conceptLabel = concept.name; // Default to the concept name
+                const typeLower = (concept.type || '').toLowerCase();
+                
+                if (typeLower === 'population') {
+                    conceptLabel = 'Population';
+                } else if (typeLower === 'intervention') {
+                    conceptLabel = 'Intervention';
+                } else if (typeLower === 'comparison') {
+                    conceptLabel = 'Comparison';
+                } else if (typeLower === 'outcome') {
+                    conceptLabel = 'Outcome';
+                }
+                
+                return {
+                    name: conceptLabel,
+                    value: concept.name
+                };
             });
             
-            if (conceptDescriptions.length === 0) {
-                return toast.error('No valid concepts found. Please add some concepts first.');
+            // Determine number of terms based on keyword style
+            let numTerms = 5; // balanced default
+            if (keywordStyle === 'focused') {
+                numTerms = 3;
+            } else if (keywordStyle === 'comprehensive') {
+                numTerms = 10;
             }
             
-            let vocabInstructions = 'For the "controlled_vocabulary" array: ';
+            let vocabInstructions = '';
             if (selectedDBs.pubmed) {
                 vocabInstructions += 'Generate 2-3 relevant MeSH terms, where each is an object like {"term": "Term Name", "type": "MeSH"}. ';
             }
@@ -339,30 +501,227 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 vocabInstructions = 'The "controlled_vocabulary" array must be empty.';
             }
             
-            const prompt = `For each concept provided: ${conceptDescriptions.join('; ')}, generate search terms based on the concept name and its synonyms. ${keywordGenerationStyles[keywordStyle].aiPrompt || keywordGenerationStyles.balanced.aiPrompt} ${vocabInstructions} 
+            const prompt = `You are an expert information specialist in academic information retrieval, systematic reviews, and database query design.
 
-IMPORTANT: Return ONLY a single, valid JSON object where each key is the EXACT concept name as provided. For example, if you have a concept called "Healthcare Professionals", the key should be "Healthcare Professionals", not "healthcare_professionals" or "healthcareprofessionals".
+You are part of ReVue's AI engine, helping researchers build reproducible and context-aware search strategies.
 
-Each concept should have this structure:
+ 
+
+===========================================================
+
+🔸 STAGE 2: TERM EXPANSION
+
+===========================================================
+
+ 
+
+Using the provided confirmed concepts, generate up to ${numTerms} relevant academic search terms or synonyms for each concept.
+
+ 
+
+Guidelines:
+
+- Use the context (discipline, study design, desired/undesired outcomes) to guide term selection.
+
+- Include common synonyms, abbreviations, and controlled vocabulary equivalents (e.g., MeSH, Emtree).
+
+- Exclude any terms matching undesired outcomes or concepts.
+
+- Maintain diversity and precision — avoid redundancy.
+
+- Do NOT fabricate unrelated or non-academic terms.
+
+- Return ONLY valid JSON.
+
+ 
+
+────────────────────────────
+
+Context:
+
+- Research Question: ${researchQuestion}
+
+- Project Type: ${projectType || '(optional)'}
+
+- Discipline: ${discipline || '(optional)'}
+
+- Desired Outcomes: ${desiredOutcomes || '(optional)'}
+
+- Undesired Outcomes: ${undesiredOutcomes || '(optional)'}
+
+────────────────────────────
+
+ 
+
+User-confirmed concepts:
+
+${JSON.stringify(conceptsForPrompt, null, 2)}
+
+ 
+
+────────────────────────────
+
+Return format:
+
 {
-  "keywords": ["term1", "term2", "term3"],
-  "controlled_vocabulary": [{"term": "Term Name", "type": "MeSH"}]
+
+  "concept_terms": [
+
+    {
+
+      "concept": "Concept Name",
+
+      "terms": ["term1", "term2", "term3", "term4", "term5"]
+
+    }
+
+  ]
+
 }
 
-Return ONLY the JSON object with no additional text.`;
+ 
+
+────────────────────────────
+
+Example Input:
+
+{
+
+  "research_question": "What is the effectiveness of mindfulness-based therapy on anxiety among healthcare professionals?",
+
+  "project_type": "systematic review",
+
+  "discipline": "public health",
+
+  "desired_outcomes": ["reduction in anxiety", "mental wellbeing improvement"],
+
+  "undesired_outcomes": ["children", "animal studies"],
+
+  "concepts": [
+
+    { "name": "Population", "value": "healthcare professionals" },
+
+    { "name": "Intervention", "value": "mindfulness-based therapy" },
+
+    { "name": "Outcome", "value": "anxiety reduction" }
+
+  ]
+
+}
+
+ 
+
+Example Output:
+
+{
+
+  "concept_terms": [
+
+    {
+
+      "concept": "Population",
+
+      "terms": ["healthcare workers", "nurses", "clinicians", "medical staff", "hospital personnel"]
+
+    },
+
+    {
+
+      "concept": "Intervention",
+
+      "terms": ["mindfulness", "mindfulness-based stress reduction", "MBSR", "meditation training", "mindfulness intervention"]
+
+    },
+
+    {
+
+      "concept": "Outcome",
+
+      "terms": ["anxiety", "stress reduction", "emotional regulation", "psychological distress", "mental wellbeing"]
+
+    }
+
+  ]
+
+}
+
+ 
+
+===========================================================
+
+🔸 OUTPUT RULES
+
+===========================================================
+
+- Always output structured, valid JSON.
+
+- Never include explanations, commentary, or additional text outside JSON.
+
+- Maintain consistent key names exactly as shown.
+
+- If any optional detail (discipline, project type, outcomes) is missing, ignore it — do NOT infer or invent replacements.
+
+ 
+
+===========================================================
+
+🔸 REMINDER
+
+===========================================================
+
+Your role is to support reproducible academic research.  
+
+Focus on accuracy, domain-specific sensitivity, and terminological relevance.
+
+ 
+
+${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor controlled vocabulary, include it in a separate "controlled_vocabulary" field for each concept in the concept_terms array.` : ''}`;
             
             const result = await callGeminiAPI(prompt);
             
+            // Process the result - it should have concept_terms array
             const updatedConcepts = conceptsData.map(concept => {
-                let conceptData = result[concept.name];
+                // Find matching concept term data
+                let conceptTermData = null;
+                if (result.concept_terms && Array.isArray(result.concept_terms)) {
+                    // Try to match by concept name or by concept type
+                    const typeLower = (concept.type || '').toLowerCase();
+                    let conceptLabel = concept.name;
+                    
+                    if (typeLower === 'population') {
+                        conceptLabel = 'Population';
+                    } else if (typeLower === 'intervention') {
+                        conceptLabel = 'Intervention';
+                    } else if (typeLower === 'comparison') {
+                        conceptLabel = 'Comparison';
+                    } else if (typeLower === 'outcome') {
+                        conceptLabel = 'Outcome';
+                    }
+                    
+                    conceptTermData = result.concept_terms.find(ct => 
+                        ct.concept === conceptLabel || 
+                        ct.concept === concept.name ||
+                        ct.concept?.toLowerCase() === conceptLabel.toLowerCase()
+                    );
+                }
+                
                 let keywords = [];
                 let controlled_vocabulary = [];
                 
-                if (Array.isArray(conceptData)) {
-                    keywords = conceptData;
-                } else if (conceptData && typeof conceptData === 'object') {
-                    keywords = Array.isArray(conceptData.keywords) ? conceptData.keywords : [];
-                    controlled_vocabulary = Array.isArray(conceptData.controlled_vocabulary) ? conceptData.controlled_vocabulary : [];
+                if (conceptTermData) {
+                    keywords = Array.isArray(conceptTermData.terms) ? conceptTermData.terms : [];
+                    controlled_vocabulary = Array.isArray(conceptTermData.controlled_vocabulary) ? conceptTermData.controlled_vocabulary : [];
+                }
+                
+                // Fallback: try to find by concept name in result (old format compatibility)
+                if (keywords.length === 0 && result[concept.name]) {
+                    const conceptData = result[concept.name];
+                    if (Array.isArray(conceptData)) {
+                        keywords = conceptData;
+                    } else if (conceptData && typeof conceptData === 'object') {
+                        keywords = Array.isArray(conceptData.keywords) ? conceptData.keywords : [];
+                        controlled_vocabulary = Array.isArray(conceptData.controlled_vocabulary) ? conceptData.controlled_vocabulary : [];
+                    }
                 }
                 
                 const updatedConcept = {

@@ -22,7 +22,7 @@ function ManualProjectCreationModal({ onClose, onCreateProject, isCreating, proj
             outcomesNotNeeded: outcomesNotNeeded.trim() || null,
             questionTemplate: questionTemplate || null,
         };
-        onCreateProject(projectName, extraData);
+        onCreateProject(projectName, null, '', extraData);
     };
 
     const handleKeyDown = (event) => {
