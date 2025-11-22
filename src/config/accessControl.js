@@ -8,7 +8,8 @@ export const ACCESS_LEVELS = {
         canSeeLiveCounts: false,
         maxProjectsPerLifetime: 2,
         maxConceptGenerationsPerProject: 2,
-        maxKeywordGenerationsPerProject: 2
+        maxKeywordGenerationsPerProject: 2,
+        canUseRefineFeature: false
     },
     premium: {
         canUseAiProject: true,
@@ -17,7 +18,8 @@ export const ACCESS_LEVELS = {
         canSeeLiveCounts: true,
         maxProjectsPerLifetime: Infinity,
         maxConceptGenerationsPerProject: Infinity,
-        maxKeywordGenerationsPerProject: Infinity
+        maxKeywordGenerationsPerProject: Infinity,
+        canUseRefineFeature: true,
     }
     
 };

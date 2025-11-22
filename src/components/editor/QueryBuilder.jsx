@@ -251,16 +251,61 @@ const QueryBuilder = ({ state, actions }) => {
                                      </select> */}
                                 </div>
                                 <div className='flex items-center justify-end gap-x-2'>
-                                     <button 
+                                    <button
                                         onClick={() => {
-                                            toast('Query refinement is a future feature coming soon! 🔮', {
-                                                duration: 4000
+                                            // Check if user has access to refine feature
+                                            if (!capabilities.canUseRefineFeature) {
+                                                toast.error('Query refinement is exclusive to premium users', {
+                                                    duration: 4000,
+                                                    icon: '🔒',
+                                                });
+                                                return;
+                                            }
+
+                                            // Build modal data expected by QueryRefinementModal
+                                            const keywordsObject = {
+                                                population: { keywords: [], controlled_vocabulary: [] },
+                                                intervention: { keywords: [], controlled_vocabulary: [] },
+                                                comparison: { keywords: [], controlled_vocabulary: [] },
+                                                outcome: { keywords: [], controlled_vocabulary: [] }
+                                            };
+                                            (concepts || []).forEach(concept => {
+                                                const cat = concept.type || 'population';
+                                                if (!keywordsObject[cat]) keywordsObject[cat] = { keywords: [], controlled_vocabulary: [] };
+                                                keywordsObject[cat].keywords = Array.isArray(concept.keywords) ? concept.keywords : [];
+                                                keywordsObject[cat].controlled_vocabulary = Array.isArray(concept.controlled_vocabulary) ? concept.controlled_vocabulary : [];
                                             });
+
+                                            const modalData = {
+                                                dbKey: activeTab,
+                                                keywords: keywordsObject,
+                                                currentCount: searchCounts?.[activeTab]?.count ?? 'N/A',
+                                                searchField: 4
+                                            };
+
+                                            setRefineModalData(modalData);
                                         }}
-                                        className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                                     >
-                                        <SparklesIcon className="h-4 w-4 text-purple-500"/>Refine
-                                     </button>
+                                        disabled={!capabilities.canUseRefineFeature}
+                                        className={`inline-flex items-center gap-x-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset transition-colors ${
+                                            capabilities.canUseRefineFeature
+                                                ? 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 cursor-pointer'
+                                                : 'bg-gray-50 text-gray-400 ring-gray-200 cursor-not-allowed'
+                                        }`}
+                                        title={!capabilities.canUseRefineFeature ? '🔒 Premium feature - Upgrade to unlock' : 'Refine your query'}
+                                    >
+                                        {!capabilities.canUseRefineFeature && (
+                                            <svg className="h-3.5 w-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                            </svg>
+                                        )}
+                                        <SparklesIcon className={`h-4 w-4 ${capabilities.canUseRefineFeature ? 'text-purple-500' : 'text-gray-300'}`}/>
+                                        Refine
+                                        {!capabilities.canUseRefineFeature && (
+                                            <span className="ml-1 text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 px-1.5 py-0.5 rounded-full font-medium border border-amber-200">
+                                                Premium
+                                            </span>
+                                        )}
+                                    </button>
                                     <button 
                                         onClick={async () => {
                                             const q = queries[activeTab] || '';
