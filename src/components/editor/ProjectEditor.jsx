@@ -1147,7 +1147,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                         {step === 2 && (
                             <QueryBuilder
                                 state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes }}
-                                actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes }}
+                                actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes }}
                             />
                         )}
                         {step === 3 && (
