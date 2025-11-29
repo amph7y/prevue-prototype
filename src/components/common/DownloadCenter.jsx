@@ -113,7 +113,15 @@ function DownloadCenter() {
                                                     )}
                                                     {download.status === 'partial' && download.expectedCount && (
                                                         <p className="text-orange-600">
-                                                            Downloaded {download.articleCount?.toLocaleString() || 0} of {download.expectedCount.toLocaleString()} expected
+                                                            Downloaded {download.processedRecords?.toLocaleString() || 0}  of {download.expectedCount.toLocaleString()} expected
+                                                        </p>
+                                                    )}
+                                                    {download.originalArticleCount && download.originalArticleCount !== download.articleCount && (
+                                                        <p className="text-blue-600">
+                                                            {download.articleCount?.toLocaleString() || 0} articles after deduplication
+                                                            {download.duplicatesRemoved > 0 && (
+                                                                <span className="text-gray-500"> ({download.duplicatesRemoved.toLocaleString()} duplicates removed)</span>
+                                                            )}
                                                         </p>
                                                     )}
                                                     {duration && <p>Duration: {duration}</p>}
@@ -145,12 +153,25 @@ function DownloadCenter() {
                                                         </div>
                                                         <div className="flex items-center mt-2 text-xs text-gray-500">
                                                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                                                            <span>Downloading articles...</span>
+                                                            <span>
+                                                                {download.deduplicationStatus === 'processing' 
+                                                                    ? 'Removing duplicates...' 
+                                                                    : 'Downloading articles...'}
+                                                            </span>
                                                         </div>
-                                                        {download.processedRecords > 0 && (
-                                                            <p className="text-xs text-blue-600 mt-1 font-medium">
-                                                                {download.processedRecords.toLocaleString()} articles downloaded so far
-                                                            </p>
+                                                        {download.deduplicationStatus === 'processing' && (
+                                                            <div className="mt-2">
+                                                                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                                                    <span>Deduplication</span>
+                                                                    <span>{Math.round(download.deduplicationProgress || 0)}%</span>
+                                                                </div>
+                                                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                                                    <div 
+                                                                        className="bg-purple-600 h-1.5 rounded-full transition-all duration-300 ease-out" 
+                                                                        style={{ width: `${download.deduplicationProgress || 0}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}

@@ -352,7 +352,47 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                 return;
             }
             
-            const fileBlob = await generateExportFile(format, allArticles, options);
+            // Track original article count before deduplication
+            const originalArticleCount = allArticles.length;
+            let finalArticleCount = originalArticleCount;
+            let articlesAfterDeduplication = allArticles;
+
+            // Apply deduplication if enabled (with progress updates)
+            if (options?.deduplicate === true) {
+                updateDownload(download.id, { 
+                    deduplicationStatus: 'processing',
+                    deduplicationProgress: 0
+                });
+                
+                // Force a small delay to ensure UI updates
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
+                articlesAfterDeduplication = await deduplicateArticles(
+                    allArticles, 
+                    download.id,
+                    (progress) => {
+                        updateDownload(download.id, { deduplicationProgress: progress });
+                    }
+                );
+                
+                finalArticleCount = articlesAfterDeduplication.length;
+                const duplicatesRemoved = originalArticleCount - finalArticleCount;
+                
+                updateDownload(download.id, { 
+                    deduplicationStatus: 'completed',
+                    deduplicationProgress: 100,
+                    originalArticleCount: originalArticleCount,
+                    duplicatesRemoved: duplicatesRemoved
+                });
+            }
+
+            // Check if download was cancelled before generating file
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled before generating file`);
+                return;
+            }
+
+            const fileBlob = await generateExportFile(format, articlesAfterDeduplication, options);
             
             // Check if download was cancelled after generating file
             if (cancelledDownloadsRef.current.has(download.id)) {
@@ -372,7 +412,7 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     return Math.min(globalTarget, cappedTotalRecords);
                 }
             })();
-            const actualTotal = allArticles.length;
+            const actualTotal = finalArticleCount;
             const isComplete = actualTotal >= expectedTotal;
             
             console.log('Completing download with file blob:', fileBlob);
@@ -383,7 +423,8 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                 progress: 100, 
                 fileBlob,
                 completedTime: Date.now(),
-                articleCount: allArticles.length,
+                articleCount: finalArticleCount,
+                originalArticleCount: originalArticleCount,
                 expectedCount: expectedTotal,
                 originalExpectedCount: download.originalTotalRecords,
                 isComplete: isComplete
@@ -639,6 +680,23 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                         
                         console.log(`✅ ${dbKey}: ${newArticles.length} new articles (${dbProcessedRecords}/${dbTarget})`);
                         
+                        // Update progress incrementally (20-90% range for downloading)
+                        // Calculate progress based on this database's contribution to total target
+                        const dbProgressWeight = finalTarget > 0 ? dbTarget / finalTarget : 0;
+                        const dbProgress = dbTarget > 0 ? Math.min(1, dbProcessedRecords / dbTarget) : 0;
+                        const baseProgress = 20; // Start at 20% after initial setup
+                        const downloadProgressRange = 70; // Use 70% of progress bar for downloading (20-90%)
+                        const currentProgress = baseProgress + (dbProgress * downloadProgressRange * dbProgressWeight);
+                        
+                        // Update progress (throttle updates to avoid too many re-renders - update every few batches)
+                        const updateFrequency = Math.max(5, Math.floor(batchSize / 10)); // Update every 10% of batch size or every 5 records
+                        if (dbProcessedRecords % updateFrequency === 0 || dbProcessedRecords === dbTarget) {
+                            updateDownload(download.id, { 
+                                processedRecords: dbProcessedRecords,
+                                progress: Math.min(90, Math.floor(currentProgress))
+                            });
+                        }
+                        
                         // Check if we've exceeded our target and trim if necessary
                         if (dbProcessedRecords > dbTarget) {
                             const excess = dbProcessedRecords - dbTarget;
@@ -718,11 +776,10 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             totalProcessed = allArticles.length;
         }
         
-        // Calculate progress based on final target (quota + caps)
-        const progressPercent = finalTarget > 0 ? Math.min(90, Math.floor((totalProcessed / finalTarget) * 90)) : 90;
+        // Update progress to 90% after all downloads complete (before deduplication)
         updateDownload(download.id, { 
             processedRecords: totalProcessed, 
-            progress: progressPercent 
+            progress: 90 
         });
         
         if (failedDatabases.length > 0) {
@@ -995,15 +1052,23 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
         return merged;
     };
 
-    // Main deduplication function
-    const deduplicateArticles = (articles) => {
+    // Main deduplication function (async with progress updates)
+    const deduplicateArticles = async (articles, downloadId, updateProgress) => {
         if (!articles || articles.length === 0) return articles;
 
         console.log(`Starting deduplication of ${articles.length} articles...`);
         const deduplicated = [];
         const processed = new Set();
+        const totalArticles = articles.length;
+        let lastProgressUpdate = 0;
 
         for (let i = 0; i < articles.length; i++) {
+            // Check if download was cancelled
+            if (downloadId && cancelledDownloadsRef.current.has(downloadId)) {
+                console.log(`Deduplication cancelled for download ${downloadId}`);
+                return articles; // Return original articles if cancelled
+            }
+
             if (processed.has(i)) continue;
 
             // Collect all duplicates of this article (including itself)
@@ -1031,25 +1096,43 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             // Merge all duplicates in the group at once
             const mergedArticle = mergeArticles(duplicateGroup);
             deduplicated.push(mergedArticle);
+
+            // Update progress based on processed articles count
+            if (updateProgress) {
+                const processedCount = processed.size;
+                const progress = Math.min(95, Math.floor((processedCount / totalArticles) * 90)); // Reserve 5% for file generation
+                
+                // Update progress more frequently (every 1% change or at least every 10 articles)
+                const progressChange = Math.abs(progress - lastProgressUpdate);
+                const updateFrequency = Math.max(1, Math.min(10, Math.floor(totalArticles / 100)));
+                
+                // Always update on first article, last article, or when progress changes significantly
+                if (processedCount === 1 || progressChange >= 1 || processedCount % updateFrequency === 0 || processedCount === totalArticles) {
+                    updateProgress(progress);
+                    lastProgressUpdate = progress;
+                }
+            }
+
+            // Yield to event loop periodically to keep UI responsive
+            if (i % 100 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
 
-        console.log(`Deduplication complete: ${articles.length} → ${deduplicated.length} articles`);
+        const duplicatesRemoved = totalArticles - deduplicated.length;
+        console.log(`Deduplication complete: ${totalArticles} → ${deduplicated.length} articles (${duplicatesRemoved} duplicates removed)`);
         return deduplicated;
     };
 
     const generateExportFile = async (format, articles, options) => {
-        // Apply deduplication before generating export file if enabled
-        let processedArticles = articles;
-        if (options?.deduplicate === true) {
-            processedArticles = deduplicateArticles(articles);
-        }
-
+        // Deduplication is now handled before calling this function
+        // This function just generates the file from the already-deduplicated articles
         if (format === 'csv') {
-            return generateCsvFile(processedArticles, options);
+            return generateCsvFile(articles, options);
         } else if (format === 'ris') {
-            return generateRisFile(processedArticles, options);
+            return generateRisFile(articles, options);
         } else if (format === 'printable') {
-            return generatePrintableFile(processedArticles, options);
+            return generatePrintableFile(articles, options);
         }
         throw new Error(`Unsupported format: ${format}`);
     };
