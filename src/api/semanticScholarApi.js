@@ -26,12 +26,22 @@ async function fetchSemanticScholarData(query, offset = 0, limit = 100) {
                 // Handle wrapped backend error (status 429 or 500 with Too Many Requests)
                 if (!response.ok) {
                     let errorMsg = '';
-                    try { errorMsg = (await response.json()).error || ''; } catch {
+                    let errorData = null;
+                    try { 
+                        errorData = await response.json();
+                        errorMsg = errorData.error || ''; 
+                    } catch {
                         try { errorMsg = await response.text(); } catch {}
                     }
                     if (response.status === 429 || /Too Many Requests/i.test(errorMsg)) {
                         await new Promise(r => setTimeout(r, 2000));
                         continue;
+                    }
+                    // Handle 400 Bad Request - offset/limit not available (end of results)
+                    if (response.status === 400 && /not available/i.test(errorMsg)) {
+                        // Return empty results instead of throwing error
+                        console.warn(`Semantic Scholar: Requested offset ${offset} with limit ${limit} is not available. Returning empty results.`);
+                        return { total: 0, data: [] };
                     }
                     throw new Error(`Semantic Scholar API error: ${response.status} ${response.statusText} ${errorMsg}`);
                 }
@@ -119,6 +129,11 @@ export async function searchSemanticScholar(query, limit = 100, offset = 0) {
             }))
         };
     } catch (error) {
+        // Don't log as error if it's just "not available" (expected when reaching end of results)
+        if (error.message && /not available/i.test(error.message)) {
+            console.log(`Semantic Scholar: No more results available at offset ${offset}`);
+            return { total: 0, data: [] };
+        }
         console.error('Error searching Semantic Scholar:', error);
         return { total: 0, data: [] };
     }

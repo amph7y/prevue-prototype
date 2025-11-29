@@ -18,13 +18,13 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
     const [selectedExportDBs, setSelectedExportDBs] = useState(() =>
         availableDBs.reduce((acc, key) => ({ ...acc, [key]: true }), {})
     );
-    const [includeDuplicates, setIncludeDuplicates] = useState(false);
-    const [exportMode, setExportMode] = useState('capped'); // 'capped' | 'full'
+    const [deduplicate, setDeduplicate] = useState(true);
+    const [exportMode, setExportMode] = useState('capped');
 
     const handleExport = async (format) => {
         const options = {
             selectedDBs: Object.keys(selectedExportDBs).filter(key => selectedExportDBs[key]),
-            includeDuplicates,
+            deduplicate,
             exportFullDataset: exportMode === 'full',
             exportQuotaPercent: isPremium ? 1 : 0.5
         };
@@ -34,7 +34,7 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
             await logger.logExportInitiated(null, {
                 format,
                 selectedDBs: options.selectedDBs,
-                includeDuplicates,
+                deduplicate: options.deduplicate,
                 exportFullDataset: options.exportFullDataset,
                 totalArticles: allArticles.length
             });
@@ -111,12 +111,21 @@ function ExportModal({ onClose, onExport, allArticles, hasDeduplicated }) {
                         <h4 className="text-md font-semibold text-gray-800">Content Filters</h4>
                         <div className="relative flex items-start mt-2">
                             <div className="flex h-6 items-center">
-                                <input id="exclude-duplicates" type="checkbox" checked={includeDuplicates} onChange={(e) => setIncludeDuplicates(e.target.checked)} disabled className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:bg-gray-100 disabled:text-gray-400" />
+                                <input 
+                                    id="deduplicate" 
+                                    type="checkbox" 
+                                    checked={deduplicate} 
+                                    onChange={(e) => setDeduplicate(e.target.checked)} 
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" 
+                                />
                             </div>
                             <div className="ml-3 text-sm leading-6">
-                                <label htmlFor="exclude-duplicates" className="font-medium text-gray-400">
-                                    Exclude duplicates (disabled)
+                                <label htmlFor="deduplicate" className="font-medium text-gray-900 cursor-pointer">
+                                    Remove duplicates
                                 </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Merge duplicate articles from different sources into single entries
+                                </p>
                             </div>
                         </div>
 
