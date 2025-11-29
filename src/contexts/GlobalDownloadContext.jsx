@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { retryAsync } from '../utils/utils.js';
 import { searchPubmed } from '../api/pubmedApi.js';
 import { searchElsevier } from '../api/elsevierApi.js';
 import { searchCore } from '../api/coreApi.js';
+import { searchSemanticScholar } from '../api/semanticScholarApi.js';
 import { EXPORT_CAPS } from '../config/exportConfig.js';
 
 // IndexedDB utils for persistent file storage
@@ -102,6 +103,7 @@ export const useGlobalDownload = () => {
 export const GlobalDownloadProvider = ({ children, currentProjectId = null }) => {
     const [downloads, setDownloads] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
+    const cancelledDownloadsRef = useRef(new Set());
 
     // Load downloads from localStorage on mount and when currentProjectId changes
     useEffect(() => {
@@ -256,6 +258,9 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
     }, []);
 
     const removeDownload = useCallback(async (downloadId) => {
+        // Mark download as cancelled to stop background processing
+        cancelledDownloadsRef.current.add(downloadId);
+        
         // Remove file blob from IndexedDB
         await deleteFileBlob(downloadId);
         
@@ -288,6 +293,12 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
 
     const processBackgroundDownload = async (download) => {
         try {
+            // Check if download was cancelled before starting
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled, stopping processing`);
+                return;
+            }
+            
             const { projectId, format, options, queries, searchTotals } = download;
             
             updateDownload(download.id, { status: 'processing', progress: 5 });
@@ -321,9 +332,33 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                 progress: 10 
             });
 
+            // Check if download was cancelled before fetching articles
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled before fetching articles`);
+                return;
+            }
+
             const allArticles = await fetchAllArticles(download, totalRecords);
             
+            // Check if download was cancelled after fetching articles
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled after fetching articles`);
+                return;
+            }
+            
+            // Check if download was cancelled before generating file
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled before generating file`);
+                return;
+            }
+            
             const fileBlob = await generateExportFile(format, allArticles, options);
+            
+            // Check if download was cancelled after generating file
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled after generating file`);
+                return;
+            }
             
             const expectedTotal = download.totalRecords || (() => {
                 const quotaPercent = typeof download.options?.exportQuotaPercent === 'number' ? download.options.exportQuotaPercent : 0.5;
@@ -366,6 +401,12 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             }
             
         } catch (error) {
+            // Don't update status if download was cancelled
+            if (cancelledDownloadsRef.current.has(download.id)) {
+                console.log(`Download ${download.id} was cancelled, not showing error`);
+                return;
+            }
+            
             console.error('Background download failed:', error);
             updateDownload(download.id, { 
                 status: 'failed', 
@@ -383,6 +424,12 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
     };
 
     const fetchAllArticles = async (download, totalRecords) => {
+        // Check if download was cancelled
+        if (cancelledDownloadsRef.current.has(download.id)) {
+            console.log(`Download ${download.id} was cancelled, returning empty articles`);
+            return [];
+        }
+        
         const { queries, searchTotals, options } = download;
         const allArticles = [];
         const seenIds = new Set(); // Track unique IDs to prevent duplicates
@@ -440,6 +487,8 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     return 25; // Scopus has very strict rate limits
                 case 'pubmed':
                     return 50; 
+                case 'semanticScholar':
+                    return 100; // Semantic Scholar allows reasonable batch sizes
                 case 'core':
                 default:
                     return 500; // Default batch size
@@ -515,7 +564,14 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             
             // Process batches for this database
             let offset = 0;
-            while (dbProcessedRecords < dbTarget) {
+            let shouldStop = false;
+            while (dbProcessedRecords < dbTarget && !shouldStop) {
+                // Check if download was cancelled
+                if (cancelledDownloadsRef.current.has(download.id)) {
+                    console.log(`🛑 ${dbKey}: Download ${download.id} was cancelled, stopping batch processing`);
+                    break;
+                }
+                
                 const remainingForDb = dbTarget - dbProcessedRecords;
                 const currentBatchSize = Math.min(batchSize, remainingForDb);
                 
@@ -535,6 +591,9 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                             return await searchElsevier(dbKey, query, currentBatchSize, offset);
                         } else if (dbKey === 'core') {
                             return await searchCore(query, currentBatchSize, offset);
+                        } else if (dbKey === 'semanticScholar') {
+                            const result = await searchSemanticScholar(query, currentBatchSize, offset);
+                            return result.data || [];
                         }
                         throw new Error(`Unsupported database: ${dbKey}`);
                     }, { 
@@ -546,16 +605,28 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                     const articles = response.data || response;
                     console.log(`📥 API RESPONSE: ${dbKey} - requested: ${currentBatchSize}, received: ${articles?.length || 0}`);
                     
+                    // If we got no articles, we've likely reached the end of available results
+                    // For Semantic Scholar, this can happen when offset exceeds available results
+                    if (!articles || articles.length === 0) {
+                        if (dbKey === 'semanticScholar') {
+                            console.log(`🛑 ${dbKey}: No more results available at offset ${offset}, stopping fetch`);
+                        } else {
+                            console.log(`⚠️ ${dbKey}: Empty response at offset ${offset}, may have reached end of results`);
+                        }
+                        shouldStop = true;
+                        continue; // Skip to next iteration, which will exit due to shouldStop
+                    }
+                    
                     if (articles && articles.length > 0) {
                         const processedArticles = articles.map(article => ({
                             ...article,
                             sourceDB: dbKey,
-                            uniqueId: `${dbKey}_${article.uid || article.id || Math.random().toString(36).substr(2, 9)}`
+                            uniqueId: article.uniqueId || `${dbKey}_${article.uid || article.id || (dbKey === 'semanticScholar' ? article.paperId : null) || Math.random().toString(36).substr(2, 9)}`
                         }));
                         
                         // Only add articles that haven't been seen before
                         const newArticles = processedArticles.filter(article => {
-                            const id = article.uniqueId || `${dbKey}_${article.uid || article.id}`;
+                            const id = article.uniqueId || `${dbKey}_${article.uid || article.id || (dbKey === 'semanticScholar' ? article.paperId : null)}`;
                             if (seenIds.has(id)) {
                                 return false; // Skip duplicate
                             }
@@ -583,8 +654,20 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
                         }
                     }
                     
+                    // Check if download was cancelled before rate limiting delay
+                    if (cancelledDownloadsRef.current.has(download.id)) {
+                        console.log(`🛑 ${dbKey}: Download ${download.id} was cancelled, stopping batch processing`);
+                        break;
+                    }
+                    
                     // Rate limiting delay per database
                     await new Promise(resolve => setTimeout(resolve, 2500));
+                    
+                    // Check again after delay
+                    if (cancelledDownloadsRef.current.has(download.id)) {
+                        console.log(`🛑 ${dbKey}: Download ${download.id} was cancelled after delay, stopping batch processing`);
+                        break;
+                    }
                     
                 } catch (error) {
                     console.error(`❌ ${dbKey} failed at offset ${offset}:`, error.message);
@@ -597,9 +680,21 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             return dbArticles;
         });
         
+        // Check if download was cancelled before processing database tasks
+        if (cancelledDownloadsRef.current.has(download.id)) {
+            console.log(`Download ${download.id} was cancelled before processing database tasks`);
+            return [];
+        }
+        
         updateDownload(download.id, { progress: 20 }); // Show we're starting
         
         const results = await Promise.allSettled(databaseTasks);
+        
+        // Check if download was cancelled after processing database tasks
+        if (cancelledDownloadsRef.current.has(download.id)) {
+            console.log(`Download ${download.id} was cancelled after processing database tasks`);
+            return allArticles; // Return what we have so far
+        }
         
         let totalProcessed = 0;
         const failedDatabases = [];
@@ -638,13 +733,323 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
         return allArticles;
     };
 
+    // Deduplication utility functions
+    const cleanString = (str) => {
+        if (!str) return '';
+        return String(str)
+            .toLowerCase()
+            .replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+            .replace(/\s+/g, ' ')     // Normalize whitespace
+            .trim();
+    };
+
+    // Calculate similarity between two strings using Levenshtein distance
+    const calculateSimilarity = (str1, str2) => {
+        const s1 = cleanString(str1);
+        const s2 = cleanString(str2);
+        if (!s1 || !s2) return 0;
+        if (s1 === s2) return 1;
+
+        const len1 = s1.length;
+        const len2 = s2.length;
+        if (len1 === 0 || len2 === 0) return 0;
+
+        // Use a simpler approach: longest common subsequence ratio
+        const longer = len1 > len2 ? s1 : s2;
+        const shorter = len1 > len2 ? s2 : s1;
+        
+        // Check if shorter is a substantial substring of longer
+        if (longer.includes(shorter) && shorter.length / longer.length >= 0.85) {
+            return 0.9; // High similarity
+        }
+
+        // Calculate Levenshtein distance
+        const matrix = [];
+        for (let i = 0; i <= len2; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= len1; j++) {
+            matrix[0][j] = j;
+        }
+        for (let i = 1; i <= len2; i++) {
+            for (let j = 1; j <= len1; j++) {
+                if (s2[i - 1] === s1[j - 1]) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+        const distance = matrix[len2][len1];
+        const maxLen = Math.max(len1, len2);
+        return 1 - (distance / maxLen);
+    };
+
+    // Normalize author name for comparison
+    const normalizeAuthorName = (name) => {
+        if (!name) return '';
+        return String(name)
+            .toLowerCase()
+            .replace(/[^\w\s]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+
+    // Extract author names from article
+    const extractAuthorNames = (article) => {
+        if (!article.authors) return [];
+        return article.authors
+            .map(a => {
+                const name = typeof a === 'string' ? a : (a?.name || '');
+                return normalizeAuthorName(name);
+            })
+            .filter(name => name.length > 0);
+    };
+
+    // Check if two articles have at least 2 overlapping authors
+    const hasAuthorOverlap = (article1, article2) => {
+        const authors1 = extractAuthorNames(article1);
+        const authors2 = extractAuthorNames(article2);
+        
+        if (authors1.length === 0 || authors2.length === 0) return false;
+        
+        const overlap = authors1.filter(a1 => authors2.includes(a1));
+        return overlap.length >= 2;
+    };
+
+    // Normalize DOI for comparison
+    const normalizeDOI = (doi) => {
+        if (!doi) return null;
+        return String(doi)
+            .toLowerCase()
+            .replace(/^https?:\/\/(dx\.)?doi\.org\//, '')
+            .replace(/^doi:/, '')
+            .trim();
+    };
+
+    // Check if two articles are duplicates
+    const areDuplicates = (article1, article2) => {
+        // Extract source(s) from each article (handle both single and merged sources)
+        const getSources = (article) => {
+            const sourceStr = article.sourceDB || '';
+            return sourceStr.split(';').map(s => s.trim()).filter(s => s);
+        };
+        
+        const sources1 = getSources(article1);
+        const sources2 = getSources(article2);
+        
+        // Must come from different sources (no overlap in source sets)
+        const hasSourceOverlap = sources1.some(s1 => sources2.includes(s1));
+        if (hasSourceOverlap) {
+            return false; // Same source(s), not duplicates
+        }
+
+        // Check DOI match (if both have DOIs) - strongest indicator
+        const doi1 = normalizeDOI(article1.doi || article1.externalIds?.DOI);
+        const doi2 = normalizeDOI(article2.doi || article2.externalIds?.DOI);
+        if (doi1 && doi2 && doi1 === doi2) {
+            return true;
+        }
+
+        // Check title similarity (≥ 85%) - must have both titles
+        const title1 = (article1.title || '').trim();
+        const title2 = (article2.title || '').trim();
+        if (title1.length >= 10 && title2.length >= 10) { // Only check if titles are substantial
+            const similarity = calculateSimilarity(title1, title2);
+            if (similarity >= 0.85) {
+                // If title similarity is high, also check authors to be more confident
+                const authors1 = extractAuthorNames(article1);
+                const authors2 = extractAuthorNames(article2);
+                // If both have authors, require at least 1 overlap for title match
+                if (authors1.length > 0 && authors2.length > 0) {
+                    const authorOverlap = authors1.filter(a1 => authors2.includes(a1));
+                    if (authorOverlap.length >= 1) {
+                        return true;
+                    }
+                } else {
+                    // If no authors, rely on title similarity alone
+                    return true;
+                }
+            }
+        }
+
+        // Check author overlap (≥ 2 authors) - only if we have enough authors
+        if (hasAuthorOverlap(article1, article2)) {
+            // Also check title similarity to be more confident
+            if (title1.length >= 5 && title2.length >= 5) {
+                const similarity = calculateSimilarity(title1, title2);
+                if (similarity >= 0.70) { // Lower threshold when we have author match
+                    return true;
+                }
+            } else {
+                // If titles are too short, rely on author overlap alone
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    // Merge multiple articles, keeping the most complete metadata
+    const mergeArticles = (articles) => {
+        if (articles.length === 0) return null;
+        if (articles.length === 1) return articles[0];
+        
+        const merged = { ...articles[0] };
+        
+        // Collect all unique sources from all articles
+        const sources = new Set();
+        articles.forEach(article => {
+            // Handle both single source strings and already merged sources (semicolon-separated)
+            const articleSources = (article.sourceDB || '').split(';').map(s => s.trim()).filter(s => s);
+            articleSources.forEach(source => sources.add(source));
+        });
+        
+        // Merge sources (sorted for consistency)
+        merged.sourceDB = Array.from(sources).sort().join('; ');
+
+        // Keep longer/more complete title from all articles
+        articles.forEach(article => {
+            if ((article.title || '').length > (merged.title || '').length) {
+                merged.title = article.title;
+            }
+        });
+
+        // Merge authors (keep unique authors from all articles)
+        const allAuthors = [];
+        const seenAuthorNames = new Set();
+        
+        articles.forEach(article => {
+            if (Array.isArray(article.authors)) {
+                article.authors.forEach(author => {
+                    const name = typeof author === 'string' ? author : (author?.name || '');
+                    const normalized = normalizeAuthorName(name);
+                    if (normalized && !seenAuthorNames.has(normalized)) {
+                        seenAuthorNames.add(normalized);
+                        allAuthors.push(typeof author === 'string' ? { name } : author);
+                    }
+                });
+            }
+        });
+        merged.authors = allAuthors;
+
+        // Keep most complete year from all articles
+        articles.forEach(article => {
+            if (article.year && (!merged.year || article.year > merged.year)) {
+                merged.year = article.year;
+            }
+            if (article.pubdate && (!merged.pubdate || article.pubdate > merged.pubdate)) {
+                merged.pubdate = article.pubdate;
+            }
+        });
+
+        // Keep most complete journal/venue from all articles
+        articles.forEach(article => {
+            if ((article.venue || '').length > (merged.venue || '').length) {
+                merged.venue = article.venue;
+            }
+            if ((article.journal || '').length > (merged.journal || '').length) {
+                merged.journal = article.journal;
+            }
+            if ((article.source || '').length > (merged.source || '').length) {
+                merged.source = article.source;
+            }
+        });
+
+        // Keep most complete DOI from all articles
+        articles.forEach(article => {
+            if (!merged.doi && article.doi) {
+                merged.doi = article.doi;
+            }
+            if (article.externalIds) {
+                if (!merged.externalIds) {
+                    merged.externalIds = { ...article.externalIds };
+                } else {
+                    merged.externalIds = { ...merged.externalIds, ...article.externalIds };
+                }
+            }
+        });
+
+        // Keep longest abstract from all articles
+        articles.forEach(article => {
+            if ((article.abstract || '').length > (merged.abstract || '').length) {
+                merged.abstract = article.abstract;
+            }
+        });
+
+        // Keep other fields from articles with more complete data
+        articles.forEach(article => {
+            if (article.url && !merged.url) merged.url = article.url;
+            if (article.citationCount !== undefined && (merged.citationCount === undefined || article.citationCount > merged.citationCount)) {
+                merged.citationCount = article.citationCount;
+            }
+            if (article.fieldsOfStudy && (!merged.fieldsOfStudy || article.fieldsOfStudy.length > merged.fieldsOfStudy.length)) {
+                merged.fieldsOfStudy = article.fieldsOfStudy;
+            }
+        });
+
+        return merged;
+    };
+
+    // Main deduplication function
+    const deduplicateArticles = (articles) => {
+        if (!articles || articles.length === 0) return articles;
+
+        console.log(`Starting deduplication of ${articles.length} articles...`);
+        const deduplicated = [];
+        const processed = new Set();
+
+        for (let i = 0; i < articles.length; i++) {
+            if (processed.has(i)) continue;
+
+            // Collect all duplicates of this article (including itself)
+            const duplicateGroup = [articles[i]];
+            const duplicateIndices = [i];
+
+            // Find all duplicates of this article
+            for (let j = i + 1; j < articles.length; j++) {
+                if (processed.has(j)) continue;
+
+                // Check if articles[j] is a duplicate of any article in the current group
+                const isDuplicate = duplicateGroup.some(groupArticle => 
+                    areDuplicates(groupArticle, articles[j])
+                );
+
+                if (isDuplicate) {
+                    duplicateIndices.push(j);
+                    duplicateGroup.push(articles[j]);
+                }
+            }
+
+            // Mark all duplicates as processed
+            duplicateIndices.forEach(idx => processed.add(idx));
+
+            // Merge all duplicates in the group at once
+            const mergedArticle = mergeArticles(duplicateGroup);
+            deduplicated.push(mergedArticle);
+        }
+
+        console.log(`Deduplication complete: ${articles.length} → ${deduplicated.length} articles`);
+        return deduplicated;
+    };
+
     const generateExportFile = async (format, articles, options) => {
+        // Apply deduplication before generating export file if enabled
+        let processedArticles = articles;
+        if (options?.deduplicate === true) {
+            processedArticles = deduplicateArticles(articles);
+        }
+
         if (format === 'csv') {
-            return generateCsvFile(articles, options);
+            return generateCsvFile(processedArticles, options);
         } else if (format === 'ris') {
-            return generateRisFile(articles, options);
+            return generateRisFile(processedArticles, options);
         } else if (format === 'printable') {
-            return generatePrintableFile(articles, options);
+            return generatePrintableFile(processedArticles, options);
         }
         throw new Error(`Unsupported format: ${format}`);
     };
@@ -689,6 +1094,8 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
             const doi = item.doi || item.externalIds?.DOI;
             if(doi) ris += `DO  - ${doi}\n`;
             if(item.abstract) ris += `AB  - ${item.abstract}\n`;
+            // Add source information as a note
+            if(item.sourceDB) ris += `N1  - Source: ${item.sourceDB}\n`;
             ris += `ER  - \n`;
             return ris;
         }).join('');
@@ -697,7 +1104,7 @@ export const GlobalDownloadProvider = ({ children, currentProjectId = null }) =>
     };
 
     const generatePrintableFile = (articles, options) => {
-        const htmlContent = `<html><head><title>Printable Report</title><style>body{font-family:sans-serif;line-height:1.5;padding:20px}article{border-bottom:1px solid #eee;padding-bottom:1rem;margin-bottom:1rem}h3{font-size:1.2rem;margin-bottom:0.5rem}p{margin:0.25rem 0}.meta{font-size:0.9rem;color:#555}</style></head><body><h1>Export Results</h1>${articles.map((item, index) => `<article><h3>${index + 1}. ${item.title || 'No Title'}</h3><p class="meta"><strong>Authors:</strong> ${item.authors?.map(a => a.name).join(', ')}</p><p class="meta"><strong>Journal/Venue:</strong> ${item.venue || item.source || 'N/A'} (${item.year || item.pubdate || 'N/A'})</p><p class="meta"><strong>DOI:</strong> ${item.doi || item.externalIds?.DOI || 'N/A'}</p><p><strong>Abstract:</strong> ${item.abstract || 'No abstract available.'}</p></article>`).join('')}</body></html>`;
+        const htmlContent = `<html><head><title>Printable Report</title><style>body{font-family:sans-serif;line-height:1.5;padding:20px}article{border-bottom:1px solid #eee;padding-bottom:1rem;margin-bottom:1rem}h3{font-size:1.2rem;margin-bottom:0.5rem}p{margin:0.25rem 0}.meta{font-size:0.9rem;color:#555}</style></head><body><h1>Export Results</h1>${articles.map((item, index) => `<article><h3>${index + 1}. ${item.title || 'No Title'}</h3><p class="meta"><strong>Authors:</strong> ${item.authors?.map(a => a.name).join(', ')}</p><p class="meta"><strong>Journal/Venue:</strong> ${item.venue || item.source || 'N/A'} (${item.year || item.pubdate || 'N/A'})</p><p class="meta"><strong>DOI:</strong> ${item.doi || item.externalIds?.DOI || 'N/A'}</p><p class="meta"><strong>Source:</strong> ${item.sourceDB || 'N/A'}</p><p><strong>Abstract:</strong> ${item.abstract || 'No abstract available.'}</p></article>`).join('')}</body></html>`;
         
         return new Blob([htmlContent], { type: 'text/html' });
     };
