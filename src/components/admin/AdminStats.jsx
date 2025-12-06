@@ -357,80 +357,428 @@ const AdminStats = ({ users }) => {
       {/* Activity Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Busiest Hours */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Busiest Hours (Last 30 Days)</h3>
+        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Busiest Hours</h3>
+              <p className="text-sm text-gray-500 mt-1">Last 30 Days</p>
+            </div>
+            <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-green-200 border-t-green-600"></div>
             </div>
           ) : error ? (
-            <div className="text-center py-8 text-red-600">
-              <p>{error}</p>
+            <div className="text-center py-12 text-red-600 bg-red-50 rounded-lg">
+              <p className="font-medium">{error}</p>
             </div>
           ) : busiestHours.length > 0 ? (
-            <div className="space-y-3">
-              {busiestHours.slice(0, 8).map((hour, index) => (
-                <div key={index} className="flex items-center">
-                  <div className="w-16 text-sm text-gray-600">{hour.hourFormatted}</div>
-                  <div className="flex-1 mx-4">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-500 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${hour.percentage}%` }}
-                      ></div>
+            (() => {
+              const displayHours = busiestHours.slice(0, 6);
+              const maxCount = Math.max(...displayHours.map(h => h.count), 1);
+              const chartHeight = 240;
+              const chartWidth = 500;
+              const barWidth = 12;
+              const spacing = (chartWidth - 20 - (displayHours.length * barWidth)) / (displayHours.length + 1);
+              
+              return (
+                <div className="mt-2">
+                  <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 50}`} className="w-full h-72">
+                    {/* Gradient definitions */}
+                    <defs>
+                      <linearGradient id="hourGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
+                        <stop offset="100%" stopColor="#059669" stopOpacity="1" />
+                      </linearGradient>
+                      <filter id="shadow">
+                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.1"/>
+                      </filter>
+                    </defs>
+                    
+                    {/* Y-axis */}
+                    <line 
+                      x1="15" 
+                      y1="15" 
+                      x2="15" 
+                      y2={chartHeight + 15} 
+                      stroke="#d1d5db" 
+                      strokeWidth="1.5"
+                    />
+                    
+                    {/* X-axis */}
+                    <line 
+                      x1="15" 
+                      y1={chartHeight + 15} 
+                      x2={chartWidth - 5} 
+                      y2={chartHeight + 15} 
+                      stroke="#d1d5db" 
+                      strokeWidth="1.5"
+                    />
+                    
+                    {/* Y-axis labels and grid lines */}
+                    {[0, 25, 50, 75, 100].map((percent) => {
+                      const y = chartHeight + 15 - (percent / 100) * chartHeight;
+                      const value = Math.round((percent / 100) * maxCount);
+                      return (
+                        <g key={percent}>
+                          <line 
+                            x1="15" 
+                            y1={y} 
+                            x2={chartWidth - 5} 
+                            y2={y} 
+                            stroke="#f3f4f6" 
+                            strokeWidth="1"
+                            strokeDasharray="3,3"
+                          />
+                          <text 
+                            x="13" 
+                            y={y + 4} 
+                            textAnchor="end" 
+                            fontSize="9" 
+                            fill="#6b7280"
+                            fontWeight="500"
+                          >
+                            {value}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    
+                    {/* Bars */}
+                    {displayHours.map((hour, index) => {
+                      const barHeight = (hour.count / maxCount) * chartHeight;
+                      const x = 15 + spacing + index * (barWidth + spacing);
+                      const y = chartHeight + 15 - barHeight;
+                      const isPeak = index === 0;
+                      
+                      return (
+                        <g key={index}>
+                          {/* Bar shadow */}
+                          <rect
+                            x={x + 1}
+                            y={y + 1}
+                            width={barWidth}
+                            height={barHeight}
+                            fill="#000000"
+                            opacity="0.1"
+                            rx="2"
+                          />
+                          {/* Main bar */}
+                          <rect
+                            x={x}
+                            y={y}
+                            width={barWidth}
+                            height={barHeight}
+                            fill={isPeak ? "url(#hourGradient)" : "#10b981"}
+                            rx="2"
+                            filter="url(#shadow)"
+                            className="transition-all duration-300 hover:opacity-90"
+                          >
+                            <title>{`${hour.hourFormatted}\n${hour.count} actions\n${hour.userCount} users`}</title>
+                          </rect>
+                          {/* X-axis labels */}
+                          <text
+                            x={x + barWidth / 2}
+                            y={chartHeight + 32}
+                            textAnchor="middle"
+                            fontSize="8"
+                            fill="#4b5563"
+                            fontWeight="600"
+                          >
+                            {hour.hourFormatted}
+                          </text>
+                          {/* Value labels on top of bars */}
+                          {barHeight > 18 && (
+                            <g>
+                              <rect
+                                x={x + barWidth / 2 - 8}
+                                y={y - 16}
+                                width="16"
+                                height="12"
+                                fill="#1f2937"
+                                rx="2"
+                                opacity="0.9"
+                              />
+                              <text
+                                x={x + barWidth / 2}
+                                y={y - 6}
+                                textAnchor="middle"
+                                fontSize="7"
+                                fill="#ffffff"
+                                fontWeight="700"
+                              >
+                                {hour.count}
+                              </text>
+                            </g>
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  
+                  {/* Legend/Summary */}
+                  <div className="mt-6 pt-6 border-t border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-white rounded-lg shadow-sm mr-3">
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">Peak Hour</p>
+                          <p className="text-sm font-bold text-gray-900 mt-0.5">
+                            {displayHours[0]?.hourFormatted || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="p-2 bg-white rounded-lg shadow-sm mr-3">
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">Total Actions</p>
+                          <p className="text-sm font-bold text-gray-900 mt-0.5">
+                            {displayHours.reduce((sum, h) => sum + h.count, 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="w-20 text-sm font-medium text-gray-900 text-right">
-                    <div>{hour.count} actions</div>
-                    <div className="text-xs text-gray-500">{hour.userCount} users</div>
-                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No activity data available</p>
+            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+              <svg className="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <p className="font-medium">No activity data available</p>
             </div>
           )}
         </div>
 
         {/* Busiest Days */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Busiest Days (Last 4 Weeks)</h3>
+        <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Busiest Days</h3>
+              <p className="text-sm text-gray-500 mt-1">Last 4 Weeks</p>
+            </div>
+            <div className="p-3 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-lg">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          </div>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-200 border-t-purple-600"></div>
             </div>
           ) : error ? (
-            <div className="text-center py-8 text-red-600">
-              <p>{error}</p>
+            <div className="text-center py-12 text-red-600 bg-red-50 rounded-lg">
+              <p className="font-medium">{error}</p>
             </div>
           ) : busiestDays.length > 0 ? (
-            <div className="space-y-3">
-              {busiestDays.map((day, index) => (
-                <div key={index} className="flex items-center">
-                  <div className="w-24 text-sm text-gray-600">
-                    <div className="font-medium">{day.dayName}</div>
-                    <div className="text-xs text-gray-500">{day.dateFormatted}</div>
-                  </div>
-                  <div className="flex-1 mx-4">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-purple-500 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${day.percentage}%` }}
-                      ></div>
+            (() => {
+              const maxCount = Math.max(...busiestDays.map(d => d.count), 1);
+              const chartHeight = 220;
+              const chartWidth = 500;
+              const barWidth = Math.max(8, Math.min(14, (chartWidth - 30) / busiestDays.length - 2));
+              const spacing = (chartWidth - 30 - (busiestDays.length * barWidth)) / (busiestDays.length + 1);
+              
+              return (
+                <div className="mt-2">
+                  <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 60}`} className="w-full h-72">
+                    {/* Gradient definitions */}
+                    <defs>
+                      <linearGradient id="dayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="1" />
+                        <stop offset="100%" stopColor="#7c3aed" stopOpacity="1" />
+                      </linearGradient>
+                      <filter id="shadowDay">
+                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.15"/>
+                      </filter>
+                    </defs>
+                    
+                    {/* Y-axis */}
+                    <line 
+                      x1="15" 
+                      y1="15" 
+                      x2="15" 
+                      y2={chartHeight + 15} 
+                      stroke="#d1d5db" 
+                      strokeWidth="1.5"
+                    />
+                    
+                    {/* X-axis */}
+                    <line 
+                      x1="15" 
+                      y1={chartHeight + 15} 
+                      x2={chartWidth - 5} 
+                      y2={chartHeight + 15} 
+                      stroke="#d1d5db" 
+                      strokeWidth="1.5"
+                    />
+                    
+                    {/* Y-axis labels and grid lines */}
+                    {[0, 25, 50, 75, 100].map((percent) => {
+                      const y = chartHeight + 15 - (percent / 100) * chartHeight;
+                      const value = Math.round((percent / 100) * maxCount);
+                      return (
+                        <g key={percent}>
+                          <line 
+                            x1="15" 
+                            y1={y} 
+                            x2={chartWidth - 5} 
+                            y2={y} 
+                            stroke="#f3f4f6" 
+                            strokeWidth="1"
+                            strokeDasharray="3,3"
+                          />
+                          <text 
+                            x="13" 
+                            y={y + 4} 
+                            textAnchor="end" 
+                            fontSize="9" 
+                            fill="#6b7280"
+                            fontWeight="500"
+                          >
+                            {value}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    
+                    {/* Bars */}
+                    {busiestDays.map((day, index) => {
+                      const barHeight = (day.count / maxCount) * chartHeight;
+                      const x = 15 + spacing + index * (barWidth + spacing);
+                      const y = chartHeight + 15 - barHeight;
+                      const isPeak = index === 0;
+                      
+                      return (
+                        <g key={index}>
+                          {/* Bar shadow */}
+                          <rect
+                            x={x + 1}
+                            y={y + 1}
+                            width={barWidth}
+                            height={barHeight}
+                            fill="#000000"
+                            opacity="0.1"
+                            rx="2"
+                          />
+                          {/* Main bar */}
+                          <rect
+                            x={x}
+                            y={y}
+                            width={barWidth}
+                            height={barHeight}
+                            fill={isPeak ? "url(#dayGradient)" : "#8b5cf6"}
+                            rx="2"
+                            filter="url(#shadowDay)"
+                            className="transition-all duration-300 hover:opacity-90"
+                          >
+                            <title>{`${day.dayName} (${day.dateFormatted})\n${day.count} actions\n${day.userCount} users`}</title>
+                          </rect>
+                          {/* X-axis labels */}
+                          <text
+                            x={x + barWidth / 2}
+                            y={chartHeight + 32}
+                            textAnchor="middle"
+                            fontSize="8"
+                            fill="#4b5563"
+                            fontWeight="600"
+                          >
+                            {day.dayName.substring(0, 3)}
+                          </text>
+                          <text
+                            x={x + barWidth / 2}
+                            y={chartHeight + 42}
+                            textAnchor="middle"
+                            fontSize="7"
+                            fill="#9ca3af"
+                            fontWeight="500"
+                          >
+                            {day.dateFormatted.split('/')[1]}
+                          </text>
+                          {/* Value labels on top of bars */}
+                          {barHeight > 18 && (
+                            <g>
+                              <rect
+                                x={x + barWidth / 2 - 8}
+                                y={y - 16}
+                                width="16"
+                                height="12"
+                                fill="#1f2937"
+                                rx="2"
+                                opacity="0.9"
+                              />
+                              <text
+                                x={x + barWidth / 2}
+                                y={y - 6}
+                                textAnchor="middle"
+                                fontSize="7"
+                                fill="#ffffff"
+                                fontWeight="700"
+                              >
+                                {day.count}
+                              </text>
+                            </g>
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  
+                  {/* Legend/Summary */}
+                  <div className="mt-6 pt-6 border-t border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-white rounded-lg shadow-sm mr-3">
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">Peak Day</p>
+                          <p className="text-sm font-bold text-gray-900 mt-0.5">
+                            {busiestDays[0]?.dayName || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="p-2 bg-white rounded-lg shadow-sm mr-3">
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">Total Actions</p>
+                          <p className="text-sm font-bold text-gray-900 mt-0.5">
+                            {busiestDays.reduce((sum, d) => sum + d.count, 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="w-20 text-sm font-medium text-gray-900 text-right">
-                    <div>{day.count} actions</div>
-                    <div className="text-xs text-gray-500">{day.userCount} users</div>
-                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No activity data available</p>
+            <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+              <svg className="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <p className="font-medium">No activity data available</p>
             </div>
           )}
         </div>
@@ -574,4 +922,3 @@ const AdminStats = ({ users }) => {
 };
 
 export default AdminStats;
-
