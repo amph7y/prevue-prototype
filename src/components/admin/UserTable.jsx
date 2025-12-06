@@ -1,13 +1,74 @@
 import React, { useState } from 'react';
 import { formatFirestoreTimestamp } from '../../utils/dateUtils.js';
 
-const UserTable = ({ users, onUserUpdate, onUserDelete }) => {
+const UserTable = ({ users, onUserUpdate, onUserDelete, sortField, sortDirection, onSort }) => {
   const [editingUser, setEditingUser] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [deleteUserId, setDeleteUserId] = useState(null); 
   const [showConfirm, setShowConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
+  const getSortIcon = (field) => {
+    const isActive = sortField === field;
+    const baseClasses = "w-4 h-4 transition-all duration-200";
+    
+    if (!isActive) {
+      return (
+        <div className="flex flex-col gap-0 opacity-30">
+          <svg className={`${baseClasses} text-gray-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+          <svg className={`${baseClasses} text-gray-500 -mt-2`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      );
+    }
+    
+    // For active sort, show both arrows but highlight the active direction
+    return (
+      <div className="flex flex-col gap-0">
+        <svg 
+          className={`${baseClasses} ${sortDirection === 'asc' ? 'text-blue-600' : 'text-gray-300'}`} 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sortDirection === 'asc' ? 3 : 2} d="M5 15l7-7 7 7" />
+        </svg>
+        <svg 
+          className={`${baseClasses} ${sortDirection === 'desc' ? 'text-blue-600' : 'text-gray-300'} -mt-2`} 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sortDirection === 'desc' ? 3 : 2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+    );
+  };
+
+  const SortableHeader = ({ field, label, onSort }) => {
+    const isActive = sortField === field;
+    return (
+      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+        <button
+          onClick={() => onSort(field)}
+          className={`group flex items-center gap-2 transition-all duration-200 w-full ${
+            isActive 
+              ? 'text-blue-600 font-semibold' 
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          title={`Sort by ${label}${isActive ? ` (Currently ${sortDirection === 'asc' ? 'ascending' : 'descending'})` : ''}`}
+        >
+          <span className="flex-1 text-left">{label}</span>
+          <span className={`transition-all ${isActive ? 'scale-110' : 'group-hover:scale-105'}`}>
+            {getSortIcon(field)}
+          </span>
+        </button>
+      </th>
+    );
+  };
 
   const handleEditStart = (user) => {
     setEditingUser(user.id);
@@ -33,7 +94,6 @@ const UserTable = ({ users, onUserUpdate, onUserDelete }) => {
     setDeleteUserId(null);
     setShowConfirm(false);
   };
-
 
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Never';
@@ -83,13 +143,13 @@ const UserTable = ({ users, onUserUpdate, onUserDelete }) => {
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <SortableHeader field="name" label="User" onSort={onSort} />
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Access Level</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
+                <SortableHeader field="createdAt" label="Created At" onSort={onSort} />
+                <SortableHeader field="lastLoginAt" label="Last Login" onSort={onSort} />
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -183,7 +243,6 @@ const UserTable = ({ users, onUserUpdate, onUserDelete }) => {
                         >
                           Delete
                         </button>
-
                       </div>
                     )}
                   </td>
@@ -192,41 +251,38 @@ const UserTable = ({ users, onUserUpdate, onUserDelete }) => {
             </tbody>
           </table>
           {showConfirm && (
-  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-    <div className="bg-white rounded-lg p-6 shadow-lg w-80 text-center">
-      <h2 className="text-lg font-semibold text-gray-900 mb-2">Confirm Deletion</h2>
-      <p className="text-sm text-gray-600 mb-4">
-        Are you sure you want to delete this user? This action cannot be undone.
-      </p>
-      <div className="flex justify-center space-x-3">
-        <button
-          onClick={() => {
-            onUserDelete(userToDelete);
-            setShowConfirm(false);
-            setUserToDelete(null);
-          }}
-          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
-        >
-          Delete
-        </button>
-        <button
-          onClick={() => {
-            setShowConfirm(false);
-            setUserToDelete(null);
-          }}
-          className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+              <div className="bg-white rounded-lg p-6 shadow-lg w-80 text-center">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Confirm Deletion</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Are you sure you want to delete this user? This action cannot be undone.
+                </p>
+                <div className="flex justify-center space-x-3">
+                  <button
+                    onClick={() => {
+                      onUserDelete(userToDelete);
+                      setShowConfirm(false);
+                      setUserToDelete(null);
+                    }}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowConfirm(false);
+                      setUserToDelete(null);
+                    }}
+                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-
-      
     </>
   );
 };
