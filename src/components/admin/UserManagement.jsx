@@ -7,18 +7,104 @@ const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRef
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAccess, setFilterAccess] = useState('all');
   const [filterRole, setFilterRole] = useState('all');
+  const [sortField, setSortField] = useState('name'); // 'name', 'email', 'createdAt', 'lastLoginAt'
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
 
   // Filter users based on search and filters
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.displayName?.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesAccess = filterAccess === 'all' || user.accessLevel === filterAccess;
     const matchesRole = filterRole === 'all' || user.role === filterRole;
-    
     return matchesSearch && matchesAccess && matchesRole;
   });
+
+  // Sort users
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    let aValue = null;
+    let bValue = null;
+
+    if (sortField === 'name') {
+      aValue = (a.displayName || a.email || '').toLowerCase();
+      bValue = (b.displayName || b.email || '').toLowerCase();
+      
+      // Handle string comparison
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    } else if (sortField === 'email') {
+      aValue = (a.email || '').toLowerCase();
+      bValue = (b.email || '').toLowerCase();
+      
+      // Handle string comparison
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    } else if (sortField === 'createdAt') {
+      // Convert timestamps to milliseconds for comparison
+      const getDateValue = (date) => {
+        if (!date) return null;
+        // Handle Firestore Timestamp object
+        if (date.toDate) return date.toDate().getTime();
+        // Handle plain object with _seconds and _nanoseconds
+        if (date._seconds !== undefined) {
+          return (date._seconds * 1000) + (date._nanoseconds / 1000000);
+        }
+        // Handle regular Date or timestamp
+        return new Date(date).getTime();
+      };
+      aValue = getDateValue(a.createdAt);
+      bValue = getDateValue(b.createdAt);
+
+      // Handle null values - put them at the end regardless of sort direction
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      
+      // Compare dates
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    } else if (sortField === 'lastLoginAt') {
+      // Convert timestamps to milliseconds for comparison
+      const getDateValue = (date) => {
+        if (!date) return null;
+        // Handle Firestore Timestamp object
+        if (date.toDate) return date.toDate().getTime();
+        // Handle plain object with _seconds and _nanoseconds
+        if (date._seconds !== undefined) {
+          return (date._seconds * 1000) + (date._nanoseconds / 1000000);
+        }
+        // Handle regular Date or timestamp
+        return new Date(date).getTime();
+      };
+      aValue = getDateValue(a.lastLoginAt);
+      bValue = getDateValue(b.lastLoginAt);
+
+      // Handle null values - put them at the end regardless of sort direction
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      
+      // Compare dates
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    }
+
+    return 0;
+  });
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Toggle direction if clicking the same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new field and default to ascending
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   const handleCreateUser = async (userData) => {
     await onUserCreate(userData);
@@ -99,21 +185,8 @@ const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRef
               onClick={onRefresh}
               className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
               Refresh
             </button>
-            {/* <button
-              onClick={onBackfillSchema}
-              className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-              title="Create or fix missing user documents in Firestore"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m4-4H8" />
-              </svg>
-              Backfill User Schema
-            </button> */}
           </div>
         </div>
       </div>
@@ -186,9 +259,12 @@ const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRef
 
       {/* User Table */}
       <UserTable
-        users={filteredUsers}
+        users={sortedUsers}
         onUserUpdate={onUserUpdate}
         onUserDelete={onUserDelete}
+        sortField={sortField}
+        sortDirection={sortDirection}
+        onSort={handleSort}
       />
 
       {/* Create User Modal */}
@@ -203,4 +279,3 @@ const UserManagement = ({ users, onUserUpdate, onUserCreate, onUserDelete, onRef
 };
 
 export default UserManagement;
-

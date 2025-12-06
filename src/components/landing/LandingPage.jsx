@@ -11,10 +11,14 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
   const [lastSubmitTime, setLastSubmitTime] = useState(null);
   const { isAuthenticated, isAdmin } = useAuth();
   const [isSignupOpen, setIsSignupOpen] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(true);
+  const [currentTestimonialSlide, setCurrentTestimonialSlide] = useState(0);
+  const [isTestimonialsPaused, setIsTestimonialsPaused] = useState(false);
 
   const workflowSectionRef = useRef(null);
   const [workflowVisible, setWorkflowVisible] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
+  const [currentFeatureSlide, setCurrentFeatureSlide] = useState(0);
   
   // Section refs for navigation
   const heroRef = useRef(null);
@@ -27,8 +31,153 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
   const testimonialsRef = useRef(null);
   const teamRef = useRef(null);
   const contactRef = useRef(null);
-  const pricingRef = useRef(null);
+  const pricingRef = useRef(null); 
 
+// Testimonials data
+const testimonials = [
+  {
+    quote: "To be honest, i liked the idea of merging the keywords, the scope of search into one tool that gives the results in different journals and database which makes it easy to conduct systematic review",
+    initials: "SA",
+    name: "Mr. S A",
+    role: "Master Student",
+    color: "blue"
+  },
+  {
+    quote: "It's convenience",
+    initials: "OA",
+    name: "Mr. O A",
+    role: "PharmD Student",
+    color: "green"
+  },
+  {
+    quote: "The idea is amazing and has so much potential, the principle of unifying and simplifying a tedious manual workflow all in the same platform is extremely helpful to anyone doing a systematic review, it even cuts the time for brainstorming possible publishable papers since you don't have to do all these steps for each research question you have.",
+    initials: "AG",
+    name: "Mr. A G",
+    role: "Undergraduate Student",
+    color: "purple"
+  },
+  {
+    quote: "The concept of the idea is excellent. I watched the video and was very impressed",
+    initials: "ZN",
+    name: "Dr. Z N",
+    role: "Researcher",
+    color: "red"
+  },
+  {
+    quote: "simultaneous searches and AI integration to generate keywords",
+    initials: "ME",
+    name: "Dr. M E",
+    role: "Researcher",
+    color: "orange"
+  },
+  {
+    quote: "How easy it is to use the website, the fact that the prompts can be added using the help of Ai, and that the number of studies shows for each database",
+    initials: "GA",
+    name: "Mr. G A",
+    role: "PharmD Student",
+    color: "teal"
+  },
+  {
+    quote: "it can reduce alot of time, but you can add more things that also reduce screening time by enhancing the specificity of the results",
+    initials: "OM",
+    name: "Mr. O M",
+    role: "Undergraduate Student",
+    color: "indigo"
+  },
+  {
+    quote: "the aspect of giving you the keywords is very very useful and it is one of the most bothersome aspect of the traditional methods because you have to account for different databases.",
+    initials: "AI",
+    name: "Mrs. A I",
+    role: "Post-Grad Student",
+    color: "pink"
+  },
+  {
+    quote: "Innovative, will save researchers time",
+    initials: "HE",
+    name: "Prof. H E",
+    role: "Researcher",
+    color: "yellow"
+  },
+  {
+    quote: "ease of use and also the future impact that prevue holds , the use cases of this application is huge.",
+    initials: "AE",
+    name: "Dr. A E",
+    role: "MD & Post-Grad Student",
+    color: "cyan"
+  }
+];
+
+const testimonialsPerPage = 2;
+const totalTestimonialPages = Math.ceil(testimonials.length / testimonialsPerPage);
+// Feature carousel features
+const features = [
+  {
+    emoji: '🧠',
+    color: 'text-pink-500',
+    title: 'AI Concept & Keyword Generator',
+    description: 'Automatically extract research concepts and generate optimized keywords using PICO, SPIDER, or CIMO frameworks.'
+  },
+  {
+    emoji: '🔍',
+    color: 'text-blue-500',
+    title: 'Smart Query Builder',
+    description: 'Build multi-database queries (PubMed, Embase, Scopus, Web of Science, Semantic Scholar, CORE) with live count tracking.'
+  },
+  {
+    emoji: '⚙️',
+    color: 'text-purple-500',
+    title: 'AI Query Refiner',
+    description: 'Refine and compare results instantly, adjust fields, and apply negative keywords for better precision.'
+  },
+  {
+    emoji: '⚡',
+    color: 'text-yellow-500',
+    title: 'One-Click Multi-Database Search',
+    description: 'Run your entire literature search across all selected databases simultaneously, saving hours of manual copy-pasting and logins.'
+  },
+  {
+    emoji: '🔁',
+    color: 'text-green-500',
+    title: 'De-Duplication',
+    description: 'Automatically detect and remove duplicate articles from multiple databases.'
+  },
+  {
+    emoji: '🕓',
+    color: 'text-indigo-500',
+    title: 'Query History & Reproducibility Tracker',
+    description: 'Track how your search evolved over time, compare versions, and ensure full transparency and reproducibility in your systematic review workflow.'
+  },
+  {
+  emoji: '📦',
+  color: 'text-orange-500',
+  title: 'Export & Integration',
+  description: 'Export results seamlessly to CSV, RIS, or EndNote.'
+}
+];
+
+const nextTestimonial = () => {
+  setCurrentTestimonialSlide((prev) => (prev + 1) % totalTestimonialPages);
+};
+
+const prevTestimonial = () => {
+  setCurrentTestimonialSlide((prev) => (prev - 1 + totalTestimonialPages) % totalTestimonialPages);
+};
+
+// Group features into pages of 3
+const featuresPerPage = 2;
+const totalPages = Math.ceil(features.length / featuresPerPage);
+
+const nextSlide = () => {
+  setCurrentFeatureSlide((prev) => (prev + 1) % totalPages);
+};
+
+const prevSlide = () => {
+  setCurrentFeatureSlide((prev) => (prev - 1 + totalPages) % totalPages);
+};
+
+const goToSlide = (index) => {
+  setCurrentFeatureSlide(index);
+};
 
   // Navigation functions
   const scrollToSection = (sectionId) => {
@@ -132,6 +281,26 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
     }
   };
 
+  // Auto-advance testimonials carousel
+useEffect(() => {
+  if (isTestimonialsPaused) return;
+  
+  const timer = setInterval(() => {
+    setCurrentTestimonialSlide((prev) => (prev + 1) % totalTestimonialPages);
+  }, 5000);
+
+  return () => clearInterval(timer);
+}, [isTestimonialsPaused, totalTestimonialPages]);
+
+  // Auto-advance carousel
+useEffect(() => {
+  const timer = setInterval(() => {
+    setCurrentFeatureSlide((prev) => (prev + 1) % totalPages);
+  }, 5000); // Auto-advance every 5 seconds
+
+  return () => clearInterval(timer);
+}, []);
+
   useEffect(() => {
     // Workflow animation observer
     const workflowObserver = new IntersectionObserver(
@@ -206,7 +375,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
               onClick={() => onGetStarted(true)}
               className="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main"
             >
-              Join the List
+              Join the Waitlist
             </button>
           </div>
           }
@@ -245,30 +414,55 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
 
         {/* Hero Section */}
         <main ref={heroRef} data-section="hero" className="relative isolate">
-        <div className="hero-bg">
+          <div className="hero-bg">
             <div className="mx-auto max-w-4xl px-6 pt-24 pb-16 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-28 text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-text-dark">
-                <span className="block gradient-text">3 STEPS is all you need…</span>
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-secondary/15 to-secondary/5 border-2 border-secondary/30 mb-6 shadow-sm">
+                <svg className="w-5 h-5 text-secondary animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-sm font-bold text-secondary tracking-wide">Save Weeks of Screening Time</span>
+              </div>
+              
+              {/* Main Heading */}
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-text-dark leading-tight">
+                <span className="block text-main">3 STEPS</span>
+                <span className="block mt-2">is all you need…</span>
               </h1>
-              <p className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-bold text-text-dark">
-                To Revolutionize how you search & screen literature.
+              
+              {/* Subheading */}
+              <p className="mt-6 text-2xl sm:text-3xl lg:text-4xl font-bold text-text-dark whitespace-nowrap">
+                To Revolutionize how you search & screen literature
               </p>
+              
+              {/* Description */}
               <p className="mt-6 text-lg sm:text-xl leading-8 text-gray-700">
                 AI-powered systematic review tool that builds optimized queries and filters results.
-                <strong className="text-secondary"> Save weeks of screening time.</strong>
               </p>
-              <div className="mt-10 flex items-center justify-center gap-x-6">
+              
+              {/* CTA Button */}
+              <div className="mt-10 flex flex-col items-center justify-center gap-4">
                 <button
                   onClick={() => setIsSignupOpen(true)}
-                  className="rounded-md bg-main px-8 py-4 text-lg font-semibold text-white shadow-glow hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main transition-transform transform hover:scale-105"
+                  className="group relative rounded-xl bg-main px-10 py-5 text-lg font-bold text-white shadow-xl hover:shadow-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main transition-all duration-300 hover:scale-105 hover:bg-main-dark overflow-hidden"
                 >
-                  Join the List
+                  <span className="relative z-10 flex items-center gap-2">
+                    Join the Waitlist
+                    <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
                 </button>
+                <p className="text-sm text-gray-500 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  You are invited to test an early-stage prototype
+                </p>
               </div>
-              <p className="mt-4 text-sm text-gray-500">You are invited to test an early-stage prototype.</p>
             </div>
           </div>
-
           {/* Key Features */}
           <div ref={featuresRef} data-section="features" className="bg-fill angled-top-white angled-bottom-fill py-24 sm:py-32">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -281,42 +475,69 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                   Everything you need for fast, reproducible, and intelligent literature searches.
                 </p>
               </div>
-              {/* Feature Cards */}
-              <div className="mx-auto mt-16 grid max-w-lg grid-cols-1 gap-8 sm:max-w-2xl sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
-                {/* Card 1 */}
-                <div className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <div className="text-pink-500 text-4xl mb-4">🧠</div>
-                  <h3 className="text-lg font-semibold leading-7 text-gray-900">
-                    AI Concept & Keyword Generator
-                  </h3>
-                  <p className="mt-2 text-base leading-7 text-gray-600">
-                    Automatically extract research concepts and generate optimized keywords
-                    using PICO, SPIDER, or CIMO frameworks.
-                  </p>
+              
+              {/* Feature Carousel */}
+              <div className="mx-auto mt-16 relative">
+                <div className="overflow-hidden">
+                  <div 
+                    className="flex transition-transform duration-500 ease-in-out"
+                    style={{ transform: `translateX(-${currentFeatureSlide * 100}%)` }}
+                  >
+                    {Array.from({ length: totalPages }).map((_, pageIndex) => (
+                      <div key={pageIndex} className="w-full flex-shrink-0">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-4">
+                          {features.slice(pageIndex * featuresPerPage, (pageIndex + 1) * featuresPerPage).map((feature, index) => (
+                            <div key={index} className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
+                              <div className={`${feature.color} text-4xl mb-4`}>{feature.emoji}</div>
+                              <h3 className="text-lg font-semibold leading-7 text-gray-900 mb-3">
+                                {feature.title}
+                              </h3>
+                              <p className="text-base leading-7 text-gray-600">
+                                {feature.description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Card 2 */}
-                <div className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <div className="text-blue-500 text-4xl mb-4">🔍</div>
-                  <h3 className="text-lg font-semibold leading-7 text-gray-900">
-                    Smart Query Builder
-                  </h3>
-                  <p className="mt-2 text-base leading-7 text-gray-600">
-                    Build multi-database queries (PubMed, Embase, Scopus, Web of Science,
-                    Semantic Scholar, CORE) with live count tracking.
-                  </p>
-                </div>
+                {/* Navigation Arrows */}
+                <button
+                  onClick={prevSlide}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 bg-white rounded-full p-3 shadow-lg hover:bg-gray-100 transition-colors z-10"
+                  aria-label="Previous features"
+                >
+                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                <button
+                  onClick={nextSlide}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 bg-white rounded-full p-3 shadow-lg hover:bg-gray-100 transition-colors z-10"
+                  aria-label="Next features"
+                >
+                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
 
-                {/* Card 3 */}
-                <div className="p-8 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <div className="text-purple-500 text-4xl mb-4">⚙️</div>
-                  <h3 className="text-lg font-semibold leading-7 text-gray-900">
-                    AI Query Refiner
-                  </h3>
-                  <p className="mt-2 text-base leading-7 text-gray-600">
-                    Refine and compare results instantly, adjust fields, and apply negative
-                    keywords for better precision.
-                  </p>
+                {/* Dots Navigation */}
+                <div className="flex justify-center gap-2 mt-8">
+                  {Array.from({ length: totalPages }).map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => goToSlide(index)}
+                      className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                        index === currentFeatureSlide 
+                          ? 'bg-main w-8' 
+                          : 'bg-gray-300 hover:bg-gray-400'
+                      }`}
+                      aria-label={`Go to page ${index + 1}`}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
@@ -329,6 +550,30 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                 <p className="mt-4 text-lg leading-8 text-gray-600">
                   Choose the plan that fits your research needs
                 </p>
+                <div className="mt-8 flex items-center justify-center gap-3">
+                  <span className={`text-sm font-semibold ${!isAnnual ? 'text-text-dark' : 'text-gray-500'}`}>
+                    Monthly
+                  </span>
+                  <button
+                    onClick={() => setIsAnnual(!isAnnual)}
+                    className="relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-main focus:ring-offset-2"
+                    style={{ backgroundColor: isAnnual ? '#14b8a6' : '#d1d5db' }}
+                  >
+                    <span
+                      className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                        isAnnual ? 'translate-x-7' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-sm font-semibold ${isAnnual ? 'text-text-dark' : 'text-gray-500'}`}>
+                    Annual
+                  </span>
+                  {isAnnual && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                      Save 20%
+                    </span>
+                  )}
+                </div>
               </div>
               
               <div className="mt-16 flex justify-center">
@@ -396,11 +641,15 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                     </div>
                     <h3 className="text-2xl font-bold text-text-dark">Premium</h3>
                     <p className="mt-4 flex items-baseline gap-x-2">
-                      <span className="text-5xl font-bold tracking-tight text-text-dark">$14.99</span>
+                      <span className="text-5xl font-bold tracking-tight text-text-dark">
+                        ${isAnnual ? '11.99' : '14.99'}
+                      </span>
                       <span className="text-base font-semibold leading-7 tracking-wide text-gray-600">/month</span>
                     </p>
-                    <p className="text-sm text-gray-500">$11.99/month billed annually</p>
-                    <p className="mt-6 text-base leading-7 text-gray-600">For serious researchers and teams</p>
+                    {isAnnual && (
+                      <p className="text-sm text-gray-500">$119.90/year (Save 20%)</p>
+                    )}
+                    <p className="mt-6 text-base leading-7 text-gray-600">For all research-producing individuals</p>
                     <ul className="mt-8 space-y-3 text-sm leading-6 text-gray-600">
                       <li className="flex gap-x-3">
                         <svg className="h-6 w-5 flex-none text-main" viewBox="0 0 20 20" fill="currentColor">
@@ -481,8 +730,12 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
 
               <div className="mt-12 text-center">
                 <p className="text-sm text-gray-600">
-                  Annual pricing: <strong>$149.90/year</strong> ($119.90 discounted) • Save 20% with annual billing
-                </p>
+                    {isAnnual ? (
+                      <>All prices shown are monthly rates when billed annually</>
+                    ) : (
+                      <>Switch to annual billing and save 20%</>
+                    )}
+                  </p>
               </div>
             </div>
           </div>
@@ -696,198 +949,79 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                 <h2 className="text-lg font-semibold leading-8 tracking-tight text-main">Testimonials</h2>
                 <p className="mt-2 text-3xl font-bold tracking-tight text-text-dark sm:text-4xl">What Researchers Say is the best about PreVue:</p>
               </div>
-              <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 lg:max-w-none lg:grid-cols-2 xl:grid-cols-3 gap-8">
-                {/* Testimonial 1 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"To be honest, i liked the idea of merging the keywords, the scope of search into one tool that gives the results in different journals and database which makes it easy to conduct systematic review"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">SA</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Mr. S A</div>
-                      <div className="text-gray-600 text-xs">Master Student</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 2 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"It's convenience"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">OA</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Mr. O A</div>
-                      <div className="text-gray-600 text-xs">PharmD Student</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 3 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"The idea is amazing and has so much potential, the principle of unifying and simplifying a tedious manual workflow all in the same platform is extremely helpful to anyone doing a systematic review, it even cuts the time for brainstorming possible publishable papers since you don't have to do all these steps for each research question you have."</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">AG</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Mr. A G</div>
-                      <div className="text-gray-600 text-xs">Undergraduate Student</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 4 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"The concept of the idea is excellent. I watched the video and was very impressed"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">ZN</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Dr. Z N</div>
-                      <div className="text-gray-600 text-xs">Researcher</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 5 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"simultaneous searches and AI integration to generate keywords"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">ME</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Dr. M E</div>
-                      <div className="text-gray-600 text-xs">Researcher</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 6 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"How easy it is to use the website, the fact that the prompts can be added using the help of Ai, and that the number of studies shows for each database"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-teal-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">GA</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Mr. G A</div>
-                      <div className="text-gray-600 text-xs">PharmD Student</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 7 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"it can reduce alot of time, but you can add more things that also reduce screening time by enhancing the specificity of the results"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">OM</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Mr. O M</div>
-                      <div className="text-gray-600 text-xs">Undergraduate Student</div>
-                    </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 8 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"the aspect of giving you the keywords is very very useful and it is one of the most bothersome aspect of the traditional methods because you have to account for different databases."</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-pink-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">AI</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Mrs. A I</div>
-                      <div className="text-gray-600 text-xs">Post-Grad Student</div>
+              
+              {/* Testimonials Carousel */}
+              <div className="mx-auto mt-16 max-w-4xl relative">
+                <div 
+                  className="overflow-hidden"
+                  onMouseEnter={() => setIsTestimonialsPaused(true)}
+                  onMouseLeave={() => setIsTestimonialsPaused(false)}
+                >
+                  <div 
+                    className="flex transition-transform duration-500 ease-in-out"
+                    style={{ transform: `translateX(-${currentTestimonialSlide * 100}%)` }}
+                  >
+                    {Array.from({ length: totalTestimonialPages }).map((_, pageIndex) => (
+                      <div key={pageIndex} className="w-full flex-shrink-0">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-4">
+                          {testimonials.slice(pageIndex * testimonialsPerPage, (pageIndex + 1) * testimonialsPerPage).map((testimonial, index) => (
+                            <figure key={index} className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
+                              <blockquote className="text-gray-900">
+                                <p>"{testimonial.quote}"</p>
+                              </blockquote>
+                              <figcaption className="mt-4 flex items-center gap-x-3">
+                                <div className={`h-8 w-8 rounded-full bg-${testimonial.color}-100 flex items-center justify-center`}>
+                                  <span className="text-gray-600 font-semibold text-xs">{testimonial.initials}</span>
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-gray-900 text-sm">{testimonial.name}</div>
+                                  <div className="text-gray-600 text-xs">{testimonial.role}</div>
+                                </div>
+                              </figcaption>
+                            </figure>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  </figcaption>
-                </figure>
+                </div>
 
-                {/* Testimonial 9 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"Innovative, will save researchers time"</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">HE</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Prof. H E</div>
-                      <div className="text-gray-600 text-xs">Researcher</div>
-                    </div>
-                  </figcaption>
-                </figure>
+                {/* Navigation Arrows */}
+                <button
+                  onClick={prevTestimonial}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-12 bg-white rounded-full p-3 shadow-lg hover:bg-gray-100 transition-colors z-10"
+                  aria-label="Previous testimonials"
+                >
+                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
 
-                {/* Testimonial 10 */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"ease of use and also the future impact that prevue holds , the use cases of this application is huge."</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-cyan-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">AE</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Dr. A E</div>
-                      <div className="text-gray-600 text-xs">MD & Post-Grad Student</div>
-                    </div>
-                  </figcaption>
-                </figure>
+                <button
+                  onClick={nextTestimonial}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-12 bg-white rounded-full p-3 shadow-lg hover:bg-gray-100 transition-colors z-10"
+                  aria-label="Next testimonials"
+                >
+                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
 
-                {/* Testimonial 11 - Previous */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"PreVue saved me at least a week on my last systematic review. The time I got back for actual analysis was invaluable. It's a game-changer for building a comprehensive and reproducible search."</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">R</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Researcher</div>
-                      <div className="text-gray-600 text-xs">Leading University</div>
-                  </div>
-                  </figcaption>
-                </figure>
-
-                {/* Testimonial 12 - Previous */}
-                <figure className="rounded-2xl bg-white p-6 text-sm leading-6 shadow-lg">
-                  <blockquote className="text-gray-900">
-                    <p>"The ability to see live result counts as I refine my keywords is incredible. It removes all the guesswork and gives me complete confidence in my search strategy before I even begin screening."</p>
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-x-3">
-                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center">
-                      <span className="text-gray-600 font-semibold text-xs">IS</span>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm">Information Specialist</div>
-                      <div className="text-gray-600 text-xs">Medical Library</div>
-                    </div>
-                  </figcaption>
-                </figure>
+                {/* Dots Navigation */}
+                <div className="flex justify-center gap-2 mt-8">
+                  {Array.from({ length: totalTestimonialPages }).map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentTestimonialSlide(index)}
+                      className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                        index === currentTestimonialSlide 
+                          ? 'bg-main w-8' 
+                          : 'bg-gray-300 hover:bg-gray-400'
+                      }`}
+                      aria-label={`Go to testimonial page ${index + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -905,7 +1039,7 @@ function LandingPage({ onGetStarted,onGoToAdmin}) {
                 onClick={() => setIsSignupOpen(true)}
                 className="mt-8 inline-block rounded-md bg-main px-8 py-4 text-lg font-semibold text-white shadow-glow hover:bg-main-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-main transition-transform transform hover:scale-105"
               >
-                Join the List
+                Join the Waitlist
               </button>
             </div>
           </div>
