@@ -1087,19 +1087,134 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         return;
     };
 
-    const renderStepIndicator = () => (
-        <nav aria-label="Progress"><ol role="list" className="flex items-center">
-            {['Define', 'Query', 'Results'].map((name, index) => {
-                const s = index + 1;
-                const canNavigate = concepts && concepts.length > 0 && concepts.some(concept => concept.keywords && concept.keywords.length > 0);
-                return (<li key={name} className={cn("relative", index !== 2 ? "pr-8 sm:pr-20" : "")}> 
-                    {step > s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-main" /></div><button disabled={!canNavigate} onClick={() => setStep(s)} className="relative flex h-8 w-8 items-center justify-center rounded-full bg-main hover:bg-main-dark disabled:bg-gray-400"><CheckIcon className="h-5 w-5 text-white" /></button></>) 
-                    : step === s ? (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-main bg-white"><span className="h-2.5 w-2.5 rounded-full bg-main" /></span></>) 
-                    : (<><div className="absolute inset-0 flex items-center"><div className="h-0.5 w-full bg-gray-200" /></div><span className="group relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-300 bg-white"><span className="h-2.5 w-2.5 rounded-full bg-transparent" /></span></>)}
-                </li>);
-            })}
-        </ol></nav>
-    );
+    const renderStepIndicator = () => {
+        const steps = [
+            { number: 1, name: 'Define', label: 'Define Your Research Question', description: 'Set up your research concepts' },
+            { number: 2, name: 'Query', label: 'Build & Run Your Search', description: 'Create and execute queries' },
+            { number: 3, name: 'Results', label: 'Review & Export Results', description: 'Review and export findings' }
+        ];
+
+        // Determine if a step can be navigated to
+        const canNavigateToStep = (stepNum) => {
+            // Always allow backward navigation
+            if (stepNum < step) return true;
+            
+            // Always can go to step 1
+            if (stepNum === 1) return true;
+            
+            // Can go to step 2 if concepts exist with keywords (forward navigation)
+            if (stepNum === 2) {
+                return concepts && concepts.length > 0 && concepts.some(concept => concept.keywords && concept.keywords.length > 0);
+            }
+            
+            // Can go to step 3 if we have search results (forward navigation)
+            if (stepNum === 3) {
+                return initialArticles && initialArticles.length > 0;
+            }
+            
+            return false;
+        };
+
+        return (
+            <nav aria-label="Progress" className="mb-8">
+                <ol role="list" className="flex items-center justify-between">
+                    {steps.map((stepInfo, index) => {
+                        const s = stepInfo.number;
+                        const isCompleted = step > s;
+                        const isCurrent = step === s;
+                        const isUpcoming = step < s;
+                        const canNavigate = canNavigateToStep(s);
+                        
+                        return (
+                            <li 
+                                key={stepInfo.name} 
+                                className={cn(
+                                    "relative flex-1",
+                                    index !== steps.length - 1 ? "pr-4" : ""
+                                )}
+                            >
+                                <div className="flex flex-col items-center">
+                                    {/* Connector Line */}
+                                    {index !== steps.length - 1 && (
+                                        <div className="absolute top-5 left-[60%] right-0 h-0.5 z-0">
+                                            <div 
+                                                className={cn(
+                                                    "h-full transition-all duration-500",
+                                                    isCompleted ? "bg-main" : "bg-gray-200"
+                                                )}
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Step Circle */}
+                                    <div className="relative z-10">
+                                        {isCompleted ? (
+                                            <button
+                                                onClick={() => canNavigate && setStep(s)}
+                                                disabled={!canNavigate}
+                                                className={cn(
+                                                    "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300",
+                                                    canNavigate 
+                                                        ? "bg-main border-main hover:bg-main-dark hover:scale-110 cursor-pointer shadow-md" 
+                                                        : "bg-gray-300 border-gray-300 cursor-not-allowed"
+                                                )}
+                                                title={`Go to ${stepInfo.label}`}
+                                            >
+                                                <CheckIcon className="h-6 w-6 text-white" />
+                                            </button>
+                                        ) : isCurrent ? (
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-main bg-white shadow-lg ring-4 ring-main ring-opacity-20">
+                                                <span className="h-3 w-3 rounded-full bg-main" />
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => canNavigate && setStep(s)}
+                                                disabled={!canNavigate}
+                                                className={cn(
+                                                    "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300",
+                                                    canNavigate
+                                                        ? "border-gray-300 bg-white hover:border-main hover:bg-main hover:bg-opacity-10 hover:scale-110 cursor-pointer"
+                                                        : "border-gray-200 bg-gray-50 cursor-not-allowed"
+                                                )}
+                                                title={canNavigate ? `Go to ${stepInfo.label}` : 'Complete previous steps first'}
+                                            >
+                                                <span className="h-3 w-3 rounded-full bg-transparent" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Step Label */}
+                                    <div className="mt-3 text-center max-w-[140px]">
+                                        <div 
+                                            className={cn(
+                                                "text-xs font-semibold transition-colors duration-300",
+                                                isCurrent ? "text-main" : isCompleted ? "text-gray-700" : "text-gray-400"
+                                            )}
+                                        >
+                                            Step {s}
+                                        </div>
+                                        <div 
+                                            className={cn(
+                                                "text-xs mt-1 transition-colors duration-300 leading-tight",
+                                                isCurrent ? "text-gray-900 font-medium" : "text-gray-500"
+                                            )}
+                                        >
+                                            {stepInfo.name}
+                                        </div>
+                                        {isCurrent && (
+                                            <div className="text-[10px] mt-1 text-gray-500 leading-tight">
+                                                {stepInfo.description}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ol>
+            </nav>
+        );
+    };
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans">
@@ -1138,24 +1253,33 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="rounded-lg border bg-white p-6 md:p-10 shadow-lg">
                         <div className="mb-8">{renderStepIndicator()}</div>
-                        {step === 1 && (
-                            <DefineStep
-                                state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities }}
-                                actions={{ setResearchQuestion, setConcepts, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleGeneratePicoFromQuestion, setStep, showMenu, findSynonyms, onBackToDashboard }}
-                            />
-                        )}
-                        {step === 2 && (
-                            <QueryBuilder
-                                state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes }}
-                                actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes }}
-                            />
-                        )}
-                        {step === 3 && (
-                            <ResultsViewer
-                                state={{ searchResults, initialArticles, deduplicationResult, pageSize: retmax, isSearching, searchTotals }}
-                                actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles: setInitialArticles, setDeduplicationResult, setPageSize: setRetmax, handleRunSearch, handleDeduplicate, handlePaginatedSearch }}
-                            />
-                        )}
+                        <div className="relative min-h-[400px] overflow-hidden">
+                            <div 
+                                key={step}
+                                style={{
+                                    animation: 'fadeInSlide 0.4s ease-in-out'
+                                }}
+                            >
+                                {step === 1 && (
+                                    <DefineStep
+                                        state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities }}
+                                        actions={{ setResearchQuestion, setConcepts, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleGeneratePicoFromQuestion, setStep, showMenu, findSynonyms, onBackToDashboard }}
+                                    />
+                                )}
+                                {step === 2 && (
+                                    <QueryBuilder
+                                        state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes }}
+                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes }}
+                                    />
+                                )}
+                                {step === 3 && (
+                                    <ResultsViewer
+                                        state={{ searchResults, initialArticles, deduplicationResult, pageSize: retmax, isSearching, searchTotals }}
+                                        actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles: setInitialArticles, setDeduplicationResult, setPageSize: setRetmax, handleRunSearch, handleDeduplicate, handlePaginatedSearch }}
+                                    />
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
