@@ -3,13 +3,35 @@ import { DownloadIcon } from './Icons.jsx';
 import { useGlobalDownload } from '../../contexts/GlobalDownloadContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
-function Header({ title = "ReVue", subtitle = null, subtitleDescription = null,showNav = false, onBackButtonClicked, backButtonText = null, showDownloadButton = false, onLogoClick = null, actionButton = null, onGoToAdmin = null }) {
+function Header({
+  title = "ReVue",
+  showNav = false,
+
+  // ✅ new props for landing nav
+  navItems = [
+    { id: 'hero', label: 'Home' },
+    { id: 'features', label: 'Features' },
+    { id: 'pricing', label: 'Pricing' },
+    { id: 'how-it-works', label: 'How It Works' },
+    { id: 'team', label: 'Team' },
+    { id: 'contact', label: 'Contact' },
+  ],
+  activeSection = 'hero',
+  onNavItemClick = null,
+
+  // existing props
+  onBackButtonClicked,
+  backButtonText = null,
+  showDownloadButton = false,
+  onLogoClick = null,
+  actionButton = null,
+  onGoToAdmin = null,
+}) {
   const { downloads, setIsOpen } = useGlobalDownload();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
 
-  // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
@@ -22,103 +44,96 @@ function Header({ title = "ReVue", subtitle = null, subtitleDescription = null,s
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showUserMenu]);
-  
+
+  const handleNavClick = (id) => {
+    if (typeof onNavItemClick === 'function') onNavItemClick(id);
+  };
+
   return (
-    <nav className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-16">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              {onLogoClick ? (
-                <button
-                  onClick={onLogoClick}
-                  className="flex items-center hover:opacity-80 transition-opacity duration-200"
-                >
-                  <img
-                    src="/PreVue Logo.png"
-                    alt="PreVue"
-                    className="h-10 w-auto"
-                  />
-                </button>
-              ) : (
-                <img
-                  src="/PreVue Logo.png"
-                  alt="PreVue"
-                  className="h-10 w-auto"
-                />
-              )}
-            </div>
-            <div className="ml-3">
-              <h1 className="text-2xl font-bold text-gray-900">
-                {subtitle ? (
-                  <>
-                    {title}
-                    <span className="text-gray-600 font-medium"> | {subtitle}</span>
-                  </>
-                ) : (
-                  title
-                )}
-              </h1>
-              {subtitleDescription && (
-                <p className="text-gray-600 mt-1 text-sm">
-                  {subtitleDescription}
-                </p>
-              )}
-            </div>
-          </div>
-          
-          {showNav && (
-            <div className="hidden md:block ml-10">
-              <div className="flex items-baseline space-x-4">
-              </div>
-            </div>
-          )}
-          
-          <div className="flex-1"></div>
-          
-          <div className="flex items-center space-x-4">          
-            {/* Action Button */}
-            {actionButton && (
-              <div className="flex items-center">
-                {actionButton}
-              </div>
+    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="h-16 flex items-center justify-between gap-3">
+
+          {/* Left: Logo */}
+          <div className="flex items-center gap-3 min-w-[180px]">
+            {onLogoClick ? (
+              <button
+                onClick={onLogoClick}
+                className="flex items-center hover:opacity-80 transition-opacity"
+              >
+                <img src="/PreVue Logo.png" alt="PreVue" className="h-9 w-auto" />
+              </button>
+            ) : (
+              <img src="/PreVue Logo.png" alt="PreVue" className="h-9 w-auto" />
             )}
-            
-            <div className="flex items-center space-x-4">
-            {/* Download Center Button */}
+
+            {/* Optional title (hide on landing if you want) */}
+            <span className="hidden sm:inline text-lg font-semibold text-gray-900">
+              {title}
+            </span>
+          </div>
+
+          {/* Center: Nav */}
+          {showNav && (
+            <nav className="hidden md:flex items-center justify-center gap-7 flex-1">
+              {navItems.map((item) => {
+                const isActive = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={`text-sm font-medium transition-colors ${
+                      isActive ? 'text-main' : 'text-gray-600 hover:text-main'
+                    }`}
+                  >
+                    <span className="relative">
+                      {item.label}
+                      {isActive && (
+                        <span className="absolute -bottom-2 left-0 right-0 h-[2px] bg-main rounded-full" />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* Right: Actions + User */}
+          <div className="flex items-center gap-3 min-w-[220px] justify-end">
+
+            {/* Download Center */}
             {showDownloadButton && downloads && downloads.length > 0 && (
               <button
                 onClick={() => setIsOpen(true)}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-main hover:bg-main-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-main"
+                className="hidden sm:inline-flex items-center px-3 py-2 text-sm font-semibold rounded-md text-white bg-main hover:bg-main-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-main"
               >
                 <DownloadIcon className="h-4 w-4 mr-2" />
                 Downloads ({downloads.filter(d => d.status === 'completed' || d.status === 'partial').length})
               </button>
             )}
-            
+
             {/* Back Button */}
             {onBackButtonClicked && (
               <button
                 onClick={onBackButtonClicked}
                 className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
               >
-                {backButtonText}
+                {backButtonText || 'Back'}
               </button>
             )}
-            </div>
-            
+
+            {/* Action Button (Join waitlist / admin etc) */}
+            {actionButton && <div className="flex items-center">{actionButton}</div>}
+
+            {/* User Menu */}
             {user && (
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-md p-2"
+                  className="flex items-center gap-2 text-gray-700 hover:text-gray-900 focus:outline-none rounded-md px-2 py-1"
                 >
                   {user.photoURL ? (
-                    <img
-                      className="h-8 w-8 rounded-full"
-                      src={user.photoURL}
-                      alt={user.displayName || 'User'}
-                    />
+                    <img className="h-8 w-8 rounded-full" src={user.photoURL} alt={user.displayName || 'User'} />
                   ) : (
                     <div className="h-8 w-8 rounded-full bg-main flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
@@ -126,15 +141,16 @@ function Header({ title = "ReVue", subtitle = null, subtitleDescription = null,s
                       </span>
                     </div>
                   )}
-                  <span className="text-sm font-medium max-w-32 truncate">
+
+                  <span className="hidden lg:inline text-sm font-medium max-w-36 truncate">
                     {user.displayName || user.email || 'User'}
                   </span>
+
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
-                {/* Dropdown Menu */}
                 {showUserMenu && (
                   <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                     <div className="py-1">
@@ -144,6 +160,7 @@ function Header({ title = "ReVue", subtitle = null, subtitleDescription = null,s
                           {user.email}
                         </div>
                       </div>
+
                       {onGoToAdmin && (
                         <button
                           onClick={() => {
@@ -159,6 +176,7 @@ function Header({ title = "ReVue", subtitle = null, subtitleDescription = null,s
                           Admin Dashboard
                         </button>
                       )}
+
                       <button
                         onClick={() => {
                           logout();
@@ -176,11 +194,12 @@ function Header({ title = "ReVue", subtitle = null, subtitleDescription = null,s
                 )}
               </div>
             )}
+
           </div>
         </div>
       </div>
-    </nav>
+    </header>
   );
 }
 
-export default Header; 
+export default Header;
