@@ -10,10 +10,9 @@ function Header({
   // ✅ new props for landing nav
   navItems = [
     { id: 'hero', label: 'Home' },
-    { id: 'features', label: 'Features' },
+    { id: 'how-it-works', label: 'How It Works'},
+    { id: 'features', label: 'Features'},
     { id: 'pricing', label: 'Pricing' },
-    { id: 'how-it-works', label: 'How It Works' },
-    { id: 'team', label: 'Team' },
     { id: 'contact', label: 'Contact' },
   ],
   activeSection = 'hero',
