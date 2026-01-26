@@ -589,3 +589,57 @@ exports.healthCheck = functions.https.onRequest((req, res) => {
     res.json({ status: 'OK', message: 'Firebase Functions are running' });
   });
 });
+
+exports.callFanarApi = functions.https.onRequest(
+  { secrets: ["FANAR_API_KEY"] },
+  (req, res) => {
+    return cors(req, res, async () => {
+      try {
+        const { prompt, model, messages } = req.body || {};
+
+        // تقدر تستعمل prompt أو messages
+        const finalMessages =
+          Array.isArray(messages) && messages.length
+            ? messages
+            : prompt
+            ? [{ role: "user", content: String(prompt) }]
+            : null;
+
+        if (!finalMessages) {
+          return res.status(400).json({ error: "Provide either prompt or messages" });
+        }
+
+        const selectedModel = model || "Fanar-C-2-27B";
+
+        const response = await fetch("https://api.fanar.qa/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.FANAR_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages: finalMessages,
+            temperature: 0.3,
+            max_tokens: 600,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          return res.status(response.status).json({
+            error: "Fanar API error",
+            details: data,
+          });
+        }
+
+        const text = data?.choices?.[0]?.message?.content ?? "";
+        return res.json({ text, raw: data });
+      } catch (error) {
+        console.error("Fanar API error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+    });
+  }
+);
