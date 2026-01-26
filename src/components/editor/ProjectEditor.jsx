@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { callFanarAPI } from '../../api/fanarApi.js';
+
 
 // Config & Utils
 import { db } from '../../config/firebase.js';
@@ -41,11 +43,11 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const capabilities = getCapabilities(userAccessLevel);
     // Global Download Context
     const { addDownload, setIsOpen: setDownloadCenterOpen } = useGlobalDownload();
-    
+
     // Main State
     const [step, setStep] = useState(project.initialStep || 1);
     const [concepts, setConcepts] = useState([]);
-    
+
     const [researchQuestion, setResearchQuestion] = useState('');
     const [negativeKeywords, setNegativeKeywords] = useState(['']);
     const [keywordStyle, setKeywordStyle] = useState('balanced');
@@ -60,7 +62,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     const [isSearching, setIsSearching] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    
+
     // Track generation state and counts for restrictions
     const [conceptsGenerated, setConceptsGenerated] = useState(false);
     const [keywordsGenerated, setKeywordsGenerated] = useState(false);
@@ -108,7 +110,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 setConcepts(loadedConcepts);
                 setNegativeKeywords(data.negativeKeywords || ['']);
                 setKeywordStyle(data.keywordStyle || 'balanced');
-                
+
                 // Load generation state
                 setConceptsGenerated(data.conceptsGenerated || false);
                 setKeywordsGenerated(data.keywordsGenerated || false);
@@ -122,16 +124,16 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
         if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
         debounceTimeout.current = setTimeout(() => {
             const docRef = doc(db, `users/${userId}/projects/${project.id}`);
-            const dataToSave = { 
-                researchQuestion, 
-                concepts, 
-                negativeKeywords, 
-                keywordStyle, 
+            const dataToSave = {
+                researchQuestion,
+                concepts,
+                negativeKeywords,
+                keywordStyle,
                 conceptsGenerated,
                 keywordsGenerated,
                 conceptsGenerationCount,
                 keywordsGenerationCount,
-                lastSaved: serverTimestamp() 
+                lastSaved: serverTimestamp()
             };
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
@@ -177,22 +179,22 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
 
     const handleGeneratePicoFromQuestion = async () => {
         if (!researchQuestion.trim()) return toast.error('Please enter a research question first.');
-        
+
         // Check if concepts generation exceeds limit for this project
         const maxConcepts = capabilities.maxConceptGenerationsPerProject;
         if (Number.isFinite(maxConcepts) && conceptsGenerationCount >= maxConcepts) {
             return toast.error(`Concepts can only be generated up to ${maxConcepts} times per project.`);
         }
-        
+
         setIsLoading(true);
-        
+
         // Extract project data for the prompt
         const projectType = project.projectType || '';
         const discipline = project.discipline || '';
         const desiredOutcomes = project.outcomesNeeded || '';
         const undesiredOutcomes = project.outcomesNotNeeded || negativeKeywords.filter(k => k.trim() !== '').join(', ') || '';
         const questionTemplate = project.questionTemplate || '';
-        
+
         const prompt = `You are an expert information specialist in academic information retrieval, systematic reviews, and database query design.
 
 You are part of ReVue's AI engine, helping researchers build reproducible and context-aware search strategies.
@@ -352,58 +354,42 @@ Example Output:
 Your role is to support reproducible academic research.  
 
 Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
-                
+
         try {
-            const result = await callGeminiAPI(prompt);
-            console.log(result);
+            const result = await callFanarAPI(prompt);
+
             const generatedConcepts = [];
-            
+
             if (result.concepts && Array.isArray(result.concepts)) {
                 result.concepts.forEach((concept, index) => {
-                    if (concept.name && concept.value) {
-                        // Determine concept type based on name or create custom type
-                        let conceptType = 'custom';
-                        const nameLower = concept.name.toLowerCase();
-                        
-                        if (nameLower.includes('population')) {
-                            conceptType = 'population';
-                        } else if (nameLower.includes('intervention')) {
-                            conceptType = 'intervention';
-                        } else if (nameLower.includes('comparison')) {
-                            conceptType = 'comparison';
-                        } else if (nameLower.includes('outcome')) {
-                            conceptType = 'outcome';
-                        }
-                        
-                        // Use the value as the main term
-                        generatedConcepts.push({
-                            id: `concept_${Date.now()}_${index}`,
-                            name: concept.value,
-                            type: conceptType,
-                            synonyms: [],
-                            keywords: [],
-                            controlled_vocabulary: []
-                        });
-                    }
+                    let conceptType = "custom";
+                    const nameLower = concept.name.toLowerCase();
+
+                    if (nameLower.includes("population")) conceptType = "population";
+                    else if (nameLower.includes("intervention")) conceptType = "intervention";
+                    else if (nameLower.includes("comparison")) conceptType = "comparison";
+                    else if (nameLower.includes("outcome")) conceptType = "outcome";
+
+                    generatedConcepts.push({
+                        id: `concept_${Date.now()}_${index}`,
+                        name: concept.value,
+                        type: conceptType,
+                        synonyms: [],
+                        keywords: [],
+                        controlled_vocabulary: [],
+                    });
                 });
             }
-                        
+
             setConcepts(generatedConcepts);
             setConceptsGenerated(true);
-            setConceptsGenerationCount(prev => prev + 1);
-            
-            // Log concept generation
-            await logger.logFeatureUsed(userId, 'concept_generation', {
-                projectId: project.id,
-                projectName: project.name,
-                conceptsCount: generatedConcepts.length,
-                researchQuestion: researchQuestion.substring(0, 100)
-            });
-                        
+            setConceptsGenerationCount((prev) => prev + 1);
+
             toast.success("Concepts generated from your research question!");
         } catch (err) {
-            handleError(err, 'concept generation');
-        } finally {
+            handleError(err, "concept generation");
+        }
+        finally {
             setIsLoading(false);
         }
     };
@@ -414,11 +400,11 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
         delete contextPico[category];
         const contextText = Object.entries(contextPico).map(([key, value]) => Array.isArray(value) && value.join(' ').trim() ? `${picoLabels[key]}: ${value.join('; ')}` : null).filter(Boolean).join('\n');
         if (contextText.trim() === '') return toast.error('Please fill in at least one other PICO field for context.');
-        
+
         setPicoSuggestions({ isOpen: true, category, suggestions: [], loading: true });
         const prompt = `Given the PICO context for a systematic review:\n${contextText}\n\nSuggest 5-7 specific terms or short phrases for the "${picoLabels[category]}" component. Return ONLY a raw JSON array of strings.`;
         try {
-            const suggestions = await callGeminiAPI(prompt);
+            const suggestions = await callFanarAPI(prompt);
             setPicoSuggestions(prev => ({ ...prev, suggestions: Array.isArray(suggestions) ? suggestions : [], loading: false }));
         } catch (err) {
             handleError(err, 'PICO suggestions');
@@ -444,13 +430,13 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
         if (!conceptsData || !Array.isArray(conceptsData) || conceptsData.length === 0) {
             return toast.error('No concepts defined. Please generate PICO concepts first.');
         }
-        
+
         // Check if keywords generation exceeds limit for this project
         const maxKeywords = capabilities.maxKeywordGenerationsPerProject;
         if (Number.isFinite(maxKeywords) && keywordsGenerationCount >= maxKeywords) {
             return toast.error(`Keywords can only be generated up to ${maxKeywords} times per project.`);
         }
-        
+
         setIsLoading(true);
         try {
             // Extract project data for the prompt
@@ -458,14 +444,14 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
             const discipline = project.discipline || '';
             const desiredOutcomes = project.outcomesNeeded || '';
             const undesiredOutcomes = project.outcomesNotNeeded || negativeKeywords.filter(k => k.trim() !== '').join(', ') || '';
-            
+
             // Prepare concepts in the format expected by STAGE 2
             // We need to determine the concept name (label) from the concept type
             const conceptsForPrompt = conceptsData.map(concept => {
                 // Determine concept label based on type
                 let conceptLabel = concept.name; // Default to the concept name
                 const typeLower = (concept.type || '').toLowerCase();
-                
+
                 if (typeLower === 'population') {
                     conceptLabel = 'Population';
                 } else if (typeLower === 'intervention') {
@@ -475,13 +461,13 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
                 } else if (typeLower === 'outcome') {
                     conceptLabel = 'Outcome';
                 }
-                
+
                 return {
                     name: conceptLabel,
                     value: concept.name
                 };
             });
-            
+
             // Determine number of terms based on keyword style
             let numTerms = 5; // balanced default
             if (keywordStyle === 'focused') {
@@ -489,7 +475,7 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
             } else if (keywordStyle === 'comprehensive') {
                 numTerms = 10;
             }
-            
+
             let vocabInstructions = '';
             if (selectedDBs.pubmed) {
                 vocabInstructions += 'Generate 2-3 relevant MeSH terms, where each is an object like {"term": "Term Name", "type": "MeSH"}. ';
@@ -500,7 +486,7 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
             if (!selectedDBs.pubmed && !selectedDBs.embase) {
                 vocabInstructions = 'The "controlled_vocabulary" array must be empty.';
             }
-            
+
             const prompt = `You are an expert information specialist in academic information retrieval, systematic reviews, and database query design.
 
 You are part of ReVue's AI engine, helping researchers build reproducible and context-aware search strategies.
@@ -676,9 +662,9 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.
  
 
 ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor controlled vocabulary, include it in a separate "controlled_vocabulary" field for each concept in the concept_terms array.` : ''}`;
-            
-            const result = await callGeminiAPI(prompt);
-            
+
+            const result = await callFanarAPI(prompt);
+
             // Process the result - it should have concept_terms array
             const updatedConcepts = conceptsData.map(concept => {
                 // Find matching concept term data
@@ -687,7 +673,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                     // Try to match by concept name or by concept type
                     const typeLower = (concept.type || '').toLowerCase();
                     let conceptLabel = concept.name;
-                    
+
                     if (typeLower === 'population') {
                         conceptLabel = 'Population';
                     } else if (typeLower === 'intervention') {
@@ -697,22 +683,22 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                     } else if (typeLower === 'outcome') {
                         conceptLabel = 'Outcome';
                     }
-                    
-                    conceptTermData = result.concept_terms.find(ct => 
-                        ct.concept === conceptLabel || 
+
+                    conceptTermData = result.concept_terms.find(ct =>
+                        ct.concept === conceptLabel ||
                         ct.concept === concept.name ||
                         ct.concept?.toLowerCase() === conceptLabel.toLowerCase()
                     );
                 }
-                
+
                 let keywords = [];
                 let controlled_vocabulary = [];
-                
+
                 if (conceptTermData) {
                     keywords = Array.isArray(conceptTermData.terms) ? conceptTermData.terms : [];
                     controlled_vocabulary = Array.isArray(conceptTermData.controlled_vocabulary) ? conceptTermData.controlled_vocabulary : [];
                 }
-                
+
                 // Fallback: try to find by concept name in result (old format compatibility)
                 if (keywords.length === 0 && result[concept.name]) {
                     const conceptData = result[concept.name];
@@ -723,7 +709,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                         controlled_vocabulary = Array.isArray(conceptData.controlled_vocabulary) ? conceptData.controlled_vocabulary : [];
                     }
                 }
-                
+
                 const updatedConcept = {
                     ...concept,
                     keywords: keywords.map(term => ({
@@ -738,14 +724,14 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                         source: 'ai'
                     }))
                 };
-                
+
                 return updatedConcept;
             });
-            
+
             setConcepts(updatedConcepts);
             setKeywordsGenerated(true);
             setKeywordsGenerationCount(prev => prev + 1);
-            
+
             // Log keyword generation
             await logger.logFeatureUsed(userId, 'keyword_generation', {
                 projectId: project.id,
@@ -754,9 +740,9 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                 conceptsCount: conceptsData.length,
                 totalKeywords: updatedConcepts.reduce((sum, concept) => sum + concept.keywords.length, 0)
             });
-                        
+
             toast.success(`Keywords generated with ${keywordStyle} style!`);
-            
+
         } catch (err) {
             handleError(err, 'keyword generation');
         } finally {
@@ -804,11 +790,11 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         setResearchQuestion(testRQ);
         toast("Test parameters loaded!");
     };
-    
+
     const generateSingleQuery = (dbKey, enabledTypes = {}) => {
         if (!concepts || concepts.length === 0) return '';
         const { syntax } = DB_CONFIG[dbKey];
-    
+
         // Special handling for Semantic Scholar: keep it short and natural-language-like
         if (dbKey === 'semanticScholar') {
             // Prefer concept names; fallback to first active keyword per concept
@@ -834,12 +820,12 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         }
 
         const parts = [];
-        
+
         concepts.forEach(concept => {
             if (!concept.keywords || concept.keywords.length === 0) return;
-    
+
             let activeTerms = [];
-    
+
             // OPTIMIZED LOGIC FOR PUBMED: Combine controlled vocabulary and Keywords with OR
             if (dbKey === 'pubmed') {
                 // Include controlled vocabulary terms based on enabled types
@@ -868,17 +854,17 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
 
                         return syntax.phrase(k.term, dbField);
                     }),
-                    ...concept.controlled_vocabulary.filter(v => v.active && syntax[v.type.toLowerCase()]).map(v => syntax[v.type.toLowerCase()](v.term) )
+                    ...concept.controlled_vocabulary.filter(v => v.active && syntax[v.type.toLowerCase()]).map(v => syntax[v.type.toLowerCase()](v.term))
                 ];
             }
-    
+
             if (activeTerms.length > 0) {
                 parts.push(`(${activeTerms.join(' OR ')})`);
             }
         });
-    
+
         let finalQuery = parts.join(`\n\n${syntax.separator}\n\n `);
-    
+
         const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
         if (activeNegative.length > 0) {
             if (dbKey === 'semanticScholar') {
@@ -888,7 +874,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             } else {
                 const negativePart = activeNegative.map(k => `"${k}"`).join(' OR ');
                 if (finalQuery) {
-                   finalQuery += ` ${syntax.not} (${negativePart})`;
+                    finalQuery += ` ${syntax.not} (${negativePart})`;
                 }
             }
         }
@@ -917,14 +903,14 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             handleError(err, `count retrieval for ${dbKey}`);
         }
     };
-    
+
     const handleDbSelectionChange = (dbKey, isChecked) => {
         setSelectedDBs(prev => ({ ...prev, [dbKey]: isChecked }));
         if (isChecked && step === 2) {
             fetchAndSetCount(dbKey);
         }
     };
-    
+
     useEffect(() => {
         if (step === 2) {
             (async () => {
@@ -933,14 +919,14 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             })();
         }
     }, [step]);
-    
+
     const handleRunSearch = async (isUpdate = false) => {
         setIsSearching(true);
         if (!isUpdate) {
             setDeduplicationResult(null);
             setIrrelevantArticles(new Set());
         }
-    
+
         const currentQueries = {};
         Object.keys(selectedDBs).forEach(dbKey => {
             if (selectedDBs[dbKey]) {
@@ -952,7 +938,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         setSearchResults(null);
         let results = {};
         let allFetchedArticles = [];
-    
+
         const keys = Object.keys(currentQueries);
         const totals = {};
         const tasks = keys.map(dbKey => (async () => {
@@ -965,11 +951,11 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                     if (dbKey === 'semanticScholar') return await searchSemanticScholar(query, retmax);
                     return { total: 0, data: [] };
                 });
-                
+
                 // Extract articles and total from response
                 const articles = response.data || response; // Fallback for old format
                 const total = response.total || 0;
-                
+
                 results[dbKey] = { status: 'success', data: articles };
                 totals[dbKey] = total;
                 allFetchedArticles.push(...articles);
@@ -987,7 +973,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         setInitialArticles(allFetchedArticles);
         setSearchTotals(totals); // Store the totals from search results
         setIsSearching(false);
-        
+
         // Log search execution
         const successfulSearches = Object.values(results).filter(r => r.status === 'success').length;
         await logger.logSearchPerform(
@@ -996,7 +982,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             totals,         // per-DB counts
             keys.join(',')  // search type: comma-separated DBs
         );
-    
+
         if (!isUpdate) {
             const anyFailure = Object.values(results).some(r => r.status === 'error');
             if (anyFailure) return; // stay on Query step
@@ -1017,7 +1003,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                 if (dbKey === 'semanticScholar') return await searchSemanticScholar(query, pageSize, offset);
                 return { total: 0, data: [] };
             }, { tries: 5, baseDelayMs: 1000, factor: 3 });
-            
+
             // Extract articles from response (handle both old and new format)
             const articles = response.data || response;
             return articles;
@@ -1068,7 +1054,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             exportQuotaPercent: options?.exportQuotaPercent,
             exportFullDataset: options?.exportFullDataset
         });
-        
+
         // Always use background export (capped or full), so we can fetch beyond visible page
         console.log('Starting background export...');
         const downloadName = generateExportFilename(project.name, format);
@@ -1098,20 +1084,20 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         const canNavigateToStep = (stepNum) => {
             // Always allow backward navigation
             if (stepNum < step) return true;
-            
+
             // Always can go to step 1
             if (stepNum === 1) return true;
-            
+
             // Can go to step 2 if concepts exist with keywords (forward navigation)
             if (stepNum === 2) {
                 return concepts && concepts.length > 0 && concepts.some(concept => concept.keywords && concept.keywords.length > 0);
             }
-            
+
             // Can go to step 3 if we have search results (forward navigation)
             if (stepNum === 3) {
                 return initialArticles && initialArticles.length > 0;
             }
-            
+
             return false;
         };
 
@@ -1124,10 +1110,10 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                         const isCurrent = step === s;
                         const isUpcoming = step < s;
                         const canNavigate = canNavigateToStep(s);
-                        
+
                         return (
-                            <li 
-                                key={stepInfo.name} 
+                            <li
+                                key={stepInfo.name}
                                 className={cn(
                                     "relative flex-1",
                                     index !== steps.length - 1 ? "pr-4" : ""
@@ -1137,7 +1123,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                                     {/* Connector Line */}
                                     {index !== steps.length - 1 && (
                                         <div className="absolute top-5 left-[60%] right-0 h-0.5 z-0">
-                                            <div 
+                                            <div
                                                 className={cn(
                                                     "h-full transition-all duration-500",
                                                     isCompleted ? "bg-main" : "bg-gray-200"
@@ -1145,7 +1131,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                                             />
                                         </div>
                                     )}
-                                    
+
                                     {/* Step Circle */}
                                     <div className="relative z-10">
                                         {isCompleted ? (
@@ -1154,8 +1140,8 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                                                 disabled={!canNavigate}
                                                 className={cn(
                                                     "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300",
-                                                    canNavigate 
-                                                        ? "bg-main border-main hover:bg-main-dark hover:scale-110 cursor-pointer shadow-md" 
+                                                    canNavigate
+                                                        ? "bg-main border-main hover:bg-main-dark hover:scale-110 cursor-pointer shadow-md"
                                                         : "bg-gray-300 border-gray-300 cursor-not-allowed"
                                                 )}
                                                 title={`Go to ${stepInfo.label}`}
@@ -1182,10 +1168,10 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                                             </button>
                                         )}
                                     </div>
-                                    
+
                                     {/* Step Label */}
                                     <div className="mt-3 text-center max-w-[140px]">
-                                        <div 
+                                        <div
                                             className={cn(
                                                 "text-xs font-semibold transition-colors duration-300",
                                                 isCurrent ? "text-main" : isCompleted ? "text-gray-700" : "text-gray-400"
@@ -1193,7 +1179,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                                         >
                                             Step {s}
                                         </div>
-                                        <div 
+                                        <div
                                             className={cn(
                                                 "text-xs mt-1 transition-colors duration-300 leading-tight",
                                                 isCurrent ? "text-gray-900 font-medium" : "text-gray-500"
@@ -1219,17 +1205,17 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
     return (
         <div className="bg-gray-50 min-h-screen font-sans">
             <ContextMenuComponent />
-            <ThesaurusModal 
+            <ThesaurusModal
                 thesaurusState={thesaurusData}
                 onClose={() => setThesaurusData({ isOpen: false, word: '', synonyms: [], loading: false, context: null })}
                 onAddSynonym={handleAddSynonym}
             />
-            <PicoSuggestionsModal 
+            <PicoSuggestionsModal
                 suggestionsState={picoSuggestions}
                 onClose={() => setPicoSuggestions({ isOpen: false, category: null, suggestions: [], loading: false })}
                 onAddSuggestion={handleAddSuggestionToPico}
             />
-            <QueryRefinementModal 
+            <QueryRefinementModal
                 modalData={refineModalData}
                 onClose={() => setRefineModalData(null)}
                 onApplyChanges={(updatedKeywords) => {
@@ -1239,22 +1225,22 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             {selectedArticle && <ArticleDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
             {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={initialArticles} hasDeduplicated={!!deduplicationResult} onExport={exportHandler} />}
 
-            
-            <Header 
-                subtitle={project.name} 
-                onBackButtonClicked={onBackToDashboard} 
+
+            <Header
+                subtitle={project.name}
+                onBackButtonClicked={onBackToDashboard}
                 backButtonText="Dashboard"
                 showDownloadButton={true}
                 onLogoClick={onBackToDashboard}
             />
-            
+
 
             <main>
                 <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                     <div className="rounded-lg border bg-white p-6 md:p-10 shadow-lg">
                         <div className="mb-8">{renderStepIndicator()}</div>
                         <div className="relative min-h-[400px] overflow-hidden">
-                            <div 
+                            <div
                                 key={step}
                                 style={{
                                     animation: 'fadeInSlide 0.4s ease-in-out'
