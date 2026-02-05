@@ -419,6 +419,7 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
         }
         onGoToAdmin={onGoToAdmin}
       />
+
       {/* Hero Section */}
       <main ref={heroRef} data-section="hero" className="relative isolate">
         <div className="hero-bg">
@@ -439,8 +440,7 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
                 </h1>
 
                 <p className="mt-6 text-lg sm:text-xl text-gray-700 leading-relaxed">
-                  PreVue minimizes systematic errors in your search strategy. Validate syntax, maximize sensitivity,
-                  and deduplicate records — all before screening.
+                  ReVue Hub brings together four powerful AI-driven tools to streamline every stage of your research journey, starting with PreVue.
                 </p>
 
                 <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -651,6 +651,7 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
           </div>
         </div>
 
+
         {/* Problem / Statistic Hook */}
         <section
           data-section="problem"
@@ -665,18 +666,21 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
             </div>
 
             <h2 className="text-3xl sm:text-5xl font-extrabold leading-tight">
-              <span className="text-red-300">92.7%</span> of search strategies contain errors.
+              <span className="text-red-500">92.7%</span> of search strategies contain errors.
             </h2>
-            <p className="mt-4 text-lg text-white/80 italic">— Journal of Clinical Epidemiology</p>
+            <p className="mt-4 text-lg text-white/80 italic">Oliván, J. A. S., Cuenca, G. M., & Avilés, R. A. (2019). Errors in search strategies used in systematic reviews and their effects on information retrieval. Journal of the Medical Library Association, 107(2). https://doi.org/10.5195/jmla.2019.567</p>
             <div className="w-24 h-1 bg-yellow-300 mx-auto my-10" />
             <p className="text-lg sm:text-xl text-white/85 leading-relaxed">
-              A single missed term or incorrect boolean operator can invalidate months of work.
-              PreVue validates your strategy <span className="text-main font-semibold">before</span> you screen.
+               A <span className="text-red-500 font-semibold">single missed</span> term or incorrect boolean operator can invalidate months of work.
+            </p>
+            <p className="text-lg sm:text-xl text-white/85 leading-relaxed">
+              PreVue validates your strategy
+              <span className="text-main font-semibold"> before</span> you screen.
             </p>
           </div>
         </section>
 
-                {/* How it works */}
+        {/* How it works */}
         <div
           ref={howItWorksRef}
           data-section="how-it-works"
@@ -758,6 +762,138 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
           </div>
         </div>
 
+        {/* ReVue Hub Section */}
+        <section
+          id="hub-ecosystem"
+          data-section="hub-ecosystem"
+          className="relative py-20 lg:py-24 bg-text-dark text-white overflow-hidden"
+        >
+          {/* soft glows */}
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-main/10 blur-3xl" />
+            <div className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-sky-500/10 blur-3xl" />
+          </div>
+
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Header */}
+            <div className="text-center mb-14 lg:mb-16">
+              <h2 className="text-main font-semibold tracking-wide uppercase text-sm mb-3">
+                REVUE HUB
+              </h2>
+
+              <h3 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white">
+                Academic Research Tool Hub
+              </h3>
+
+              <p className="mt-5 max-w-3xl mx-auto text-white/70 text-base md:text-lg leading-relaxed">
+                One integrated platform containing all the tools you need for a successful research career.
+              </p>
+            </div>
+
+            {/* Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Tool 1: PreVue (LIVE) */}
+              <div className="relative rounded-2xl p-7 bg-white/5 border border-main/60 ring-1 ring-main/20 hover:shadow-glow transition-all duration-300">
+                <div className="absolute top-0 right-0 bg-main text-text-dark text-xs font-extrabold px-3 py-1 rounded-bl-xl rounded-tr-2xl">
+                  LIVE
+                </div>
+
+                <div className="mb-6">
+                  <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
+                    {/* Filter icon */}
+                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-main" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h18l-7 8v5l-4 2v-7L3 5z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <h4 className="text-xl font-extrabold text-white mb-3">PreVue</h4>
+                <p className="text-white/70 text-sm leading-relaxed mb-6">
+                  Facilitates pre-screening steps in academic reviews by validating syntax and deduplicating results.
+                </p>
+
+                <a
+                  href="#how-it-works"
+                  className="inline-flex items-center gap-2 text-white font-bold text-sm hover:text-main transition-colors"
+                >
+                  Learn more <span aria-hidden>→</span>
+                </a>
+              </div>
+
+              {/* Tool 2: Academic AI Writer */}
+              <div className="relative rounded-2xl p-7 bg-white/5 border border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20 transition-all duration-300">
+                <div className="mb-6">
+                  <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
+                    {/* Pen icon */}
+                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-sky-400" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-3">
+                  <h4 className="text-xl font-extrabold text-white">Academic AI Writer</h4>
+                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+                    Coming Soon
+                  </span>
+                </div>
+
+                <p className="text-white/65 text-sm leading-relaxed">
+                  Assists in the scientific manuscript writing process with citation-aware drafting and editing.
+                </p>
+              </div>
+
+              {/* Tool 3: Gap Finder */}
+              <div className="relative rounded-2xl p-7 bg-white/5 border border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20 transition-all duration-300">
+                <div className="mb-6">
+                  <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
+                    {/* Map pin icon */}
+                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-purple-400" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-4.35 7-11a7 7 0 10-14 0c0 6.65 7 11 7 11z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10a2 2 0 100-4 2 2 0 000 4z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-3">
+                  <h4 className="text-xl font-extrabold text-white">Gap Finder</h4>
+                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+                    Coming Soon
+                  </span>
+                </div>
+
+                <p className="text-white/65 text-sm leading-relaxed">
+                  Map the understudied areas and future study recommendations in the scientific community.
+                </p>
+              </div>
+
+              {/* Tool 4: ReApply */}
+              <div className="relative rounded-2xl p-7 bg-white/5 border border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20 transition-all duration-300">
+                <div className="mb-6">
+                  <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
+                    {/* Paper plane icon */}
+                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-3">
+                  <h4 className="text-xl font-extrabold text-white">ReApply</h4>
+                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+                    Coming Soon
+                  </span>
+                </div>
+
+                <p className="text-white/65 text-sm leading-relaxed">
+                  Streamline applying your manuscript to multiple journals with automated formatting.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
         {/* Key Features */}
         <div
           ref={featuresRef}
@@ -786,8 +922,8 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
                   AI Concept & Keyword Generator
                 </h4>
                 <p className="text-sm text-slate-600">
-                  Automatically extract research concepts and generate optimized keywords
-                  using PICO, SPIDER, or CIMO frameworks.
+                  Your Complete Academic
+                  Research Ecosystem
                 </p>
               </div>
 
@@ -908,7 +1044,7 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
               {/* Free Plan */}
               <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-lg hover:border-main/40 transition-colors">
-                <h4 className="text-2xl font-bold text-slate-900 mb-2">Free</h4>
+                <h4 className="text-2xl font-bold text-slate-900 mb-2">Free Forever</h4>
                 <p className="text-slate-500 text-sm mb-6">
                   Perfect for testing and exploring ReVue
                 </p>
@@ -949,7 +1085,7 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
                   POPULAR
                 </div>
 
-                <h4 className="text-2xl font-bold text-white mb-2">Premium</h4>
+<h4 className="text-2xl font-bold text-amber-400">Distinguished Researcher</h4>
 
                 <div className="flex items-baseline mb-1">
                   <span className="text-4xl font-extrabold text-white">
