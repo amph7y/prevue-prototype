@@ -16,7 +16,8 @@ import Header from '../common/Header.jsx';
 import { checkLifetimeProjectLimit, formatResetDate, debugLifetimeLimit, testLifetimeCalculation, recordProjectCreationEvent } from '../../utils/projectLimits.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
-function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin }) {
+function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin, isGuest = false, onStartGuestProject, onLogin }) {
+
     const { userAccessLevel } = useAuth();
     const [projects, setProjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -225,6 +226,48 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
         }
     };
     
+    if (isGuest) {
+        return (
+            <div className="bg-gray-50 min-h-screen">
+                <Header
+                    title="Dashboard"
+                    onBackButtonClicked={onBackToLanding}
+                    backButtonText="Back to Home"
+                    onLogoClick={onBackToLanding}
+                    onLogin={onLogin}
+                />
+                <main>
+                    <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+                        <div className="px-4 py-6 sm:px-0">
+                            <div className="bg-white p-8 rounded-lg shadow-md text-center">
+                                <h2 className="text-2xl font-bold text-gray-800">Welcome to the PreVue Guest Preview</h2>
+                                <p className="mt-3 text-gray-600 max-w-2xl mx-auto">
+                                    Try the core workflow with PubMed. As a guest you can generate concepts once,
+                                    generate keywords once, build a PubMed query, and run one live PubMed search.
+                                    Your work is not saved. Create a free account to unlock more databases, saving, and export.
+                                </p>
+                                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                                    <button
+                                        onClick={onStartGuestProject}
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#39d0c4] px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#32c3b5] transition-colors"
+                                    >
+                                        Start Preview Project
+                                    </button>
+                                    <button
+                                        onClick={onLogin}
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+                                    >
+                                        I already have an account
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     return (
         <div className="bg-gray-50 min-h-screen">
             {isChoiceModalOpen && (

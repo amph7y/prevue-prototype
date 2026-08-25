@@ -38,9 +38,11 @@ import logger from '../../utils/logger.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
 
-function ProjectEditor({ project, onBackToDashboard, userId }) {
+function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSignup, onLogin, userId }) {
     const { userAccessLevel } = useAuth();
-    const capabilities = getCapabilities(userAccessLevel);
+    const isGuestProject = project?.isGuest === true || !userId;
+    const effectiveAccessLevel = isGuestProject ? 'guest' : userAccessLevel;
+    const capabilities = getCapabilities(effectiveAccessLevel);
     // Global Download Context
     const { addDownload, setIsOpen: setDownloadCenterOpen } = useGlobalDownload();
 
@@ -100,6 +102,24 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
     };
 
     useEffect(() => {
+        if (isGuestProject) {
+            try {
+                const savedDraft = JSON.parse(localStorage.getItem('prevue_guest_project') || '{}');
+                setResearchQuestion(savedDraft.researchQuestion || '');
+                setConcepts(Array.isArray(savedDraft.concepts) ? savedDraft.concepts : []);
+                setNegativeKeywords(savedDraft.negativeKeywords || ['']);
+                setKeywordStyle(savedDraft.keywordStyle || 'balanced');
+                setConceptsGenerated(savedDraft.conceptsGenerated || false);
+                setKeywordsGenerated(savedDraft.keywordsGenerated || false);
+                setConceptsGenerationCount(Number(savedDraft.conceptsGenerationCount || 0));
+                setKeywordsGenerationCount(Number(savedDraft.keywordsGenerationCount || 0));
+            } catch (error) {
+                console.warn('Could not load guest draft:', error);
+            }
+            return;
+        }
+
+        if (!db || !userId || !project?.id) return;
         const docRef = doc(db, `users/${userId}/projects/${project.id}`);
         getDoc(docRef).then(docSnap => {
             if (docSnap.exists()) {
@@ -118,11 +138,31 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
                 setKeywordsGenerationCount(Number(data.keywordsGenerationCount || (data.keywordsGenerated ? 1 : 0)));
             }
         });
-    }, [project.id, userId]);
+    }, [project.id, userId, isGuestProject]);
 
     useEffect(() => {
         if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
         debounceTimeout.current = setTimeout(() => {
+            if (isGuestProject) {
+                try {
+                    localStorage.setItem('prevue_guest_project', JSON.stringify({
+                        researchQuestion,
+                        concepts,
+                        negativeKeywords,
+                        keywordStyle,
+                        conceptsGenerated,
+                        keywordsGenerated,
+                        conceptsGenerationCount,
+                        keywordsGenerationCount,
+                        lastSaved: new Date().toISOString()
+                    }));
+                } catch (error) {
+                    console.warn('Could not save guest draft:', error);
+                }
+                return;
+            }
+
+            if (!db || !userId || !project?.id) return;
             const docRef = doc(db, `users/${userId}/projects/${project.id}`);
             const dataToSave = {
                 researchQuestion,
@@ -138,7 +178,7 @@ function ProjectEditor({ project, onBackToDashboard, userId }) {
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
         return () => clearTimeout(debounceTimeout.current);
-    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId]);
+    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId, isGuestProject]);
 
     useEffect(() => {
         if (step === 2) {
@@ -884,6 +924,10 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
     const fetchAndSetCount = async (dbKey) => {
         const query = generateSingleQuery(dbKey, enabledControlledVocabTypes);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
+        if (!capabilities.canSeeLiveCounts) {
+            setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'N/A', loading: false } }));
+            return;
+        }
         setSearchCounts(prev => ({ ...prev, [dbKey]: { ...prev[dbKey], loading: true } }));
         if (!query) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 0, loading: false } }));
@@ -921,6 +965,14 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
     }, [step]);
 
     const handleRunSearch = async (isUpdate = false) => {
+        if (capabilities.requiresLoginForSearch) {
+            toast('Sign in to run your live search and save your project.');
+            if (typeof onRequireLogin === 'function') {
+                onRequireLogin();
+            }
+            return;
+        }
+
         setIsSearching(true);
         if (!isUpdate) {
             setDeduplicationResult(null);
@@ -976,12 +1028,14 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
 
         // Log search execution
         const successfulSearches = Object.values(results).filter(r => r.status === 'success').length;
-        await logger.logSearchPerform(
-            userId,
-            currentQueries, // full queries by DB
-            totals,         // per-DB counts
-            keys.join(',')  // search type: comma-separated DBs
-        );
+        if (userId) {
+            await logger.logSearchPerform(
+                userId,
+                currentQueries, // full queries by DB
+                totals,         // per-DB counts
+                keys.join(',')  // search type: comma-separated DBs
+            );
+        }
 
         if (!isUpdate) {
             const anyFailure = Object.values(results).some(r => r.status === 'error');
@@ -1047,6 +1101,11 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
     };
 
     const exportHandler = async (format, options) => {
+        if (!capabilities.canExport) {
+            toast('Create a free account to export your results.');
+            if (typeof onRequireSignup === 'function') onRequireSignup();
+            return;
+        }
         console.log('Export handler called with:', format, options);
         console.log('🔍 PROJECT EDITOR DEBUG:', {
             userAccessLevel,
@@ -1229,9 +1288,10 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
             <Header
                 subtitle={project.name}
                 onBackButtonClicked={onBackToDashboard}
-                backButtonText="Dashboard"
+                backButtonText={isGuestProject ? "Back to Dashboard" : "Dashboard"}
                 showDownloadButton={true}
                 onLogoClick={onBackToDashboard}
+                onLogin={isGuestProject ? onLogin : null}
             />
 
 
@@ -1254,14 +1314,13 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                                 )}
                                 {step === 2 && (
                                     <QueryBuilder
-                                        state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes }}
-                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes }}
-                                    />
+                                        state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, capabilities, isGuestProject }}
+                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup }}                                    />
                                 )}
                                 {step === 3 && (
                                     <ResultsViewer
-                                        state={{ searchResults, initialArticles, deduplicationResult, pageSize: retmax, isSearching, searchTotals }}
-                                        actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles: setInitialArticles, setDeduplicationResult, setPageSize: setRetmax, handleRunSearch, handleDeduplicate, handlePaginatedSearch }}
+                                        state={{ searchResults, initialArticles, deduplicationResult, pageSize: retmax, isSearching, searchTotals, capabilities, isGuestProject }}
+                                        actions={{ setStep, setSelectedArticle, setIsExportModalOpen, setAllArticles: setInitialArticles, setDeduplicationResult, setPageSize: setRetmax, handleRunSearch, handleDeduplicate, handlePaginatedSearch, onRequireSignup }}
                                     />
                                 )}
                             </div>

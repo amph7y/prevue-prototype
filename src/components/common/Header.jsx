@@ -25,6 +25,7 @@ function Header({
   onLogoClick = null,
   actionButton = null,
   onGoToAdmin = null,
+  onLogin = null,
 }) {
   const { downloads, setIsOpen } = useGlobalDownload();
   const { user, logout } = useAuth();
@@ -118,6 +119,16 @@ function Header({
                 className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
               >
                 {backButtonText || 'Back'}
+              </button>
+            )}
+
+            {/* Login Button (guests only) */}
+            {onLogin && !user && (
+              <button
+                onClick={onLogin}
+                className="inline-flex items-center rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark"
+              >
+                Login
               </button>
             )}
 
