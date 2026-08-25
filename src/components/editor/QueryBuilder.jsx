@@ -13,9 +13,23 @@ const DISABLED_DBS = ['googleScholar', 'embase'];
 
 const QueryBuilder = ({ state, actions }) => {
     const { userAccessLevel } = useAuth();
-    const capabilities = getCapabilities(userAccessLevel);
-    const { queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes } = state;
-    const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes } = actions;
+    const capabilities = state.capabilities || getCapabilities(userAccessLevel);
+    const { queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, isGuestProject } = state;
+        const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup } = actions;
+
+    const notifyGuestLocked = () => {
+        toast((t) => (
+            <span className="flex items-center gap-3">
+                Create a free account to unlock this feature.
+                <button
+                    onClick={() => { toast.dismiss(t.id); if (typeof onRequireSignup === 'function') onRequireSignup(); }}
+                    className="rounded-md bg-main px-3 py-1 text-xs font-semibold text-white hover:bg-main-dark"
+                >
+                    Sign up
+                </button>
+            </span>
+        ), { icon: '🔒', duration: 5000 });
+    };
 
     const [activeTab, setActiveTab] = useState(null);
 
@@ -39,6 +53,16 @@ const QueryBuilder = ({ state, actions }) => {
             </button>
 
             <button type="button" onClick={async () => {
+                if (capabilities.requiresLoginForSearch) {
+                    toast('Sign in to run your live search and save your project.');
+                    if (typeof onRequireLogin === 'function') {
+                        onRequireLogin();
+                    } else {
+                        handleRunSearch();
+                    }
+                    return;
+                }
+
                 // Log search initiation
                 await logger.logLiveSearchInitiated(null, {
                     selectedDatabases: Object.keys(selectedDBs).filter(key => selectedDBs[key]),
@@ -46,7 +70,7 @@ const QueryBuilder = ({ state, actions }) => {
                 });
                 handleRunSearch();
             }} disabled={isSearching} className="inline-flex items-center rounded-md border border-transparent bg-main px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50">
-                {isSearching ? <><Spinner /> <span className='ml-2'>Searching...</span></> : <><SearchIcon className="h-5 w-5 mr-2" /><span>Run Live Search</span></>}
+                {isSearching ? <><Spinner /> <span className='ml-2'>Searching...</span></> : <><SearchIcon className="h-5 w-5 mr-2" /><span>{capabilities.requiresLoginForSearch ? 'Sign in to Run Search' : 'Run Live Search'}</span></>}
             </button>
         </div>
     );
@@ -61,15 +85,18 @@ const QueryBuilder = ({ state, actions }) => {
                 <div className="p-4 border rounded-lg bg-gray-50">
                     <h3 className="text-lg font-semibold text-gray-800">Select Databases</h3>
                     {capabilities.maxDatabases !== Infinity && (
-                        <div className="mt-2 text-xs text-gray-500">Free users can select up to {capabilities.maxDatabases} databases. Upgrade for more.</div>
+                        <div className="mt-2 text-xs text-gray-500">
+                            {isGuestProject ? 'Guest previews' : 'Free users'} can select up to {capabilities.maxDatabases} database{capabilities.maxDatabases === 1 ? '' : 's'}.
+                        </div>
                     )}
                     <fieldset className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                         {Object.entries(DB_CONFIG).map(([key, { name }]) => {
                             const isImplemented = !DISABLED_DBS.includes(key);
-                            const isAllowed = isImplemented; // all implemented DBs are selectable; free is limited by count below
+                            const isGuestLocked = isGuestProject && key !== 'pubmed';
+                            const isAllowed = isImplemented && !isGuestLocked;
                             const currentSelectedCount = Object.values(selectedDBs || {}).filter(Boolean).length;
                             const reachedLimit = currentSelectedCount >= (capabilities.maxDatabases || Infinity);
-                            const disableCheckbox = !isAllowed || (!selectedDBs[key] && reachedLimit);
+                            const disableCheckbox = isGuestLocked ? false : (!isAllowed || (!selectedDBs[key] && reachedLimit));
                             return (
                                 <div key={key} className="relative flex items-start">
                                     <div className="flex h-6 items-center">
@@ -79,6 +106,7 @@ const QueryBuilder = ({ state, actions }) => {
                                             type="checkbox"
                                             checked={selectedDBs[key] || false}
                                             onChange={(e) => {
+                                                if (isGuestLocked) { notifyGuestLocked(); return; }
                                                 if (!isAllowed) return;
                                                 const next = e.target.checked;
                                                 const nextCount = currentSelectedCount + (next && !selectedDBs[key] ? 1 : (!next && selectedDBs[key] ? -1 : 0));
@@ -94,9 +122,11 @@ const QueryBuilder = ({ state, actions }) => {
                                     </div>
                                     <div className="ml-3 text-sm">
                                         <label htmlFor={key} className={(isAllowed && !disableCheckbox) ? "font-medium text-gray-900" : "font-medium text-gray-400"}>{name}</label>
-                                        {!isImplemented && (
+                                        {isGuestLocked ? (
+                                            <div className="text-xs text-main cursor-pointer" onClick={notifyGuestLocked}>Create account to use</div>
+                                        ) : (!isImplemented && (
                                             <div className="text-xs text-gray-400">Coming soon</div>
-                                        )}
+                                        ))}
                                     </div>
                                 </div>
                             );
@@ -255,10 +285,14 @@ const QueryBuilder = ({ state, actions }) => {
                                         onClick={() => {
                                             // Check if user has access to refine feature
                                             if (!capabilities.canUseRefineFeature) {
-                                                toast.error('Query refinement is exclusive to premium users', {
-                                                    duration: 4000,
-                                                    icon: '🔒',
-                                                });
+                                                if (isGuestProject) {
+                                                    notifyGuestLocked();
+                                                } else {
+                                                    toast.error('Query refinement is exclusive to premium users', {
+                                                        duration: 4000,
+                                                        icon: '🔒',
+                                                    });
+                                                }
                                                 return;
                                             }
 

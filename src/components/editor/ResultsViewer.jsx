@@ -4,15 +4,30 @@ import { DB_CONFIG } from '../../config/dbConfig.js';
 import { DownloadIcon, ArrowPathIcon as RefreshIcon, ChevronDownIcon, ChevronUpIcon, ArrowUturnLeftIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
 import logger from '../../utils/logger.js';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
 
 const ResultsViewer = ({ state, actions }) => {
-    const { searchResults, initialArticles, deduplicationResult, pageSize, isSearching, searchTotals } = state;
-    const { setStep, setSelectedArticle, setIsExportModalOpen, setPageSize, handleRunSearch, handleDeduplicate, handlePaginatedSearch } = actions;
+        const { searchResults, initialArticles, deduplicationResult, pageSize, isSearching, searchTotals, isGuestProject } = state;
+    const { setStep, setSelectedArticle, setIsExportModalOpen, setPageSize, handleRunSearch, handleDeduplicate, handlePaginatedSearch, onRequireSignup } = actions;
 
     const { userAccessLevel } = useAuth();
-    const capabilities = getCapabilities(userAccessLevel);
+    const capabilities = state.capabilities || getCapabilities(userAccessLevel);
+
+    const notifyGuestLocked = () => {
+        toast((t) => (
+            <span className="flex items-center gap-3">
+                Create a free account to export your results.
+                <button
+                    onClick={() => { toast.dismiss(t.id); if (typeof onRequireSignup === 'function') onRequireSignup(); }}
+                    className="rounded-md bg-main px-3 py-1 text-xs font-semibold text-white hover:bg-main-dark"
+                >
+                    Sign up
+                </button>
+            </span>
+        ), { icon: '🔒', duration: 5000 });
+    };
 
     const [activeTab, setActiveTab] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -155,7 +170,10 @@ const ResultsViewer = ({ state, actions }) => {
     const navButtons = (
        <div className="flex justify-between items-center">
             <button type="button" onClick={() => setStep(2)} className="inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"><ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />Back to Queries</button>
-            <button onClick={() => setIsExportModalOpen(true)} className="inline-flex items-center gap-x-2 px-4 py-2 text-sm font-medium text-white bg-main border border-transparent rounded-md shadow-sm hover:bg-main-dark">
+            <button onClick={() => {
+                if (isGuestProject || !capabilities.canExport) { notifyGuestLocked(); return; }
+                setIsExportModalOpen(true);
+            }} className="inline-flex items-center gap-x-2 px-4 py-2 text-sm font-medium text-white bg-main border border-transparent rounded-md shadow-sm hover:bg-main-dark">
                 <DownloadIcon className="h-5 w-5" /> Export All
             </button>
         </div>

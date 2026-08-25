@@ -19,6 +19,14 @@ function AppContent() {
   const [activeProject, setActiveProject] = React.useState(null);
   const [currentView, setCurrentView] = React.useState('landing');
 
+  const createGuestProject = () => ({
+    id: 'guest-preview',
+    name: 'Guest Preview',
+    color: 'bg-gray-600',
+    initialStep: 1,
+    isGuest: true,
+  });
+
   React.useEffect(() => {
     // Handle email verification links
     const auth = getAuth();
@@ -50,13 +58,19 @@ function AppContent() {
     if (!loading) {
       if (isAuthenticated) {
         if (currentView === 'login' || currentView === 'register') {
+          if (activeProject?.isGuest) {
+            setActiveProject(null);
+          }
+          setCurrentView('dashboard');
+        } else if (currentView === 'guestEditor') {
+          setActiveProject(null);
           setCurrentView('dashboard');
         }
-      } else {
+      } else if (currentView !== 'guestEditor') {
         setActiveProject(null);
       }
     }
-  }, [isAuthenticated, loading, currentView]);
+  }, [isAuthenticated, loading, currentView, activeProject]);
 
   if (loading) {
     return (
@@ -72,16 +86,37 @@ function AppContent() {
       // User is already signed in, go directly to dashboard
       setCurrentView('dashboard');
     } else {
-      // User needs to sign in
-      setCurrentView('login');
+      // Guests now land on the dashboard first
+      setCurrentView('guestDashboard');
     }
   };
 
+  const handleStartGuestProject = () => {
+    setActiveProject(createGuestProject());
+    setCurrentView('guestEditor');
+  };
+
+  const handleGuestRequiresSignup = () => {
+    toast('Create a free account to unlock this feature.');
+    setCurrentView('register');
+  };
+
   const handleBackToLanding = () => {
+    if (activeProject?.isGuest) {
+      setActiveProject(null);
+    }
     setCurrentView('landing');
   };
 
+  const handleGuestRequiresLogin = () => {
+    toast('Sign in to run your live search and save your project.');
+    setCurrentView('login');
+  };
+
   const handleLoginSuccess = () => {
+    if (activeProject?.isGuest) {
+      setActiveProject(null);
+    }
     setCurrentView('dashboard');
   };
 
@@ -126,6 +161,38 @@ function AppContent() {
     return (
       <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
         <RegisterPage onSuccess={handleRegisterSuccess} onBackToLogin={handleBackToLogin} onBackToLanding={handleBackToLanding} />
+        <DownloadCenter />
+      </GlobalDownloadProvider>
+    );
+  }
+
+  if (currentView === 'guestDashboard' && !isAuthenticated) {
+    return (
+      <GlobalDownloadProvider currentProjectId={null}>
+        <ProjectDashboard
+          isGuest={true}
+          onStartGuestProject={handleStartGuestProject}
+          onBackToLanding={handleBackToLanding}
+          onLogin={() => setCurrentView('login')}
+          userId={null}
+          user={null}
+        />
+        <DownloadCenter />
+      </GlobalDownloadProvider>
+    );
+  }
+
+  if (currentView === 'guestEditor' && !isAuthenticated && activeProject?.isGuest) {
+    return (
+      <GlobalDownloadProvider currentProjectId={activeProject.id}>
+        <ProjectEditor
+          project={activeProject}
+          onBackToDashboard={() => setCurrentView('guestDashboard')}
+          onRequireLogin={handleGuestRequiresLogin}
+          onRequireSignup={handleGuestRequiresSignup}
+          onLogin={() => setCurrentView('login')}
+          userId={null}
+        />
         <DownloadCenter />
       </GlobalDownloadProvider>
     );
