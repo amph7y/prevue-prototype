@@ -14,6 +14,18 @@ const fetch = require('node-fetch');
 const cors = require('cors')({ origin: true });
 const functions = require('firebase-functions');
 const nodemailer = require('nodemailer');
+const {
+  ValidationError,
+  validateGeminiRequest,
+  validateFanarRequest,
+  validatePubMedRequest,
+  validateElsevierRequest,
+  validateCoreRequest,
+  validateSemanticScholarRequest,
+  validateCreateUserRequest,
+  validateUpdateUserAccessRequest,
+  validateDeleteUserRequest,
+} = require('./validation');
 
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected
@@ -35,19 +47,65 @@ setGlobalOptions({ maxInstances: 10 });
 //   response.send("Hello from Firebase!");
 // });
 
+// ---------- Safe request handling ----------
+
+// An error whose message is safe to show to the user
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+// Only accept the HTTP method the app actually uses
+const allowMethod = (req, res, method) => {
+  if (req.method === method) return true;
+  res.set('Allow', method);
+  res.status(405).json({ error: 'Method not allowed' });
+  return false;
+};
+
+// Send a safe error to the browser. Details stay in the server logs only.
+const sendError = (res, error, context) => {
+  if (error instanceof ValidationError || error instanceof HttpError) {
+    return res.status(error.status).json({ error: error.message });
+  }
+  logger.error(`${context} failed`, { name: error?.name, message: error?.message });
+  return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+};
+
+const readErrorBody = (response) => response.text().catch(() => '');
+
+// Turn an error from an outside service into a safe error.
+// The service's reply is logged on the server (shortened), never sent to the browser.
+const upstreamError = (serviceName, status, bodyText) => {
+  logger.error(`${serviceName} returned an error`, { status, body: String(bodyText || '').slice(0, 500) });
+  if (status === 429) {
+    return new HttpError(429, `${serviceName} is busy right now (Too Many Requests). Please try again shortly.`);
+  }
+  return new HttpError(502, `${serviceName} is not available right now. Please try again later.`);
+};
+
+// Escape text before putting it inside an HTML email
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
 exports.callGeminiApi = functions.https.onRequest({
   secrets: ["GEMINI_API_KEY"]
 }, (req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
-      const { prompt } = req.body;
-      
-      if (!prompt) {
-        return res.status(400).json({ error: 'Prompt is required' });
-      }
+      const { prompt } = validateGeminiRequest(req.body);
 
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-      
+      // The API key goes in a header, not in the URL, so it can't leak through error messages or logs
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
@@ -55,27 +113,31 @@ exports.callGeminiApi = functions.https.onRequest({
 
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': process.env.GEMINI_API_KEY
+        },
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ message: 'Could not parse error response.' }));
-        throw new Error(`Gemini API error: ${response.statusText} - ${errorBody.error?.message || 'Unknown API error'}`);
+        throw upstreamError('The AI service', response.status, await readErrorBody(response));
       }
 
       const result = await response.json();
-      
+      const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      let parsedResult;
       try {
-        const parsedResult = JSON.parse(result.candidates[0].content.parts[0].text);
-        res.json(parsedResult);
+        parsedResult = JSON.parse(text);
       } catch (parseError) {
-        console.error("Failed to parse Gemini API response:", result.candidates[0].content.parts[0].text);
-        throw new Error("The AI returned an invalid response format.");
+        // Log only the size: the AI's answer can contain users' research content
+        logger.error('Failed to parse Gemini API response', { length: typeof text === 'string' ? text.length : 0 });
+        throw new HttpError(502, 'The AI returned an invalid response format.');
       }
+      res.json(parsedResult);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'Gemini request');
     }
   });
 });
@@ -84,12 +146,9 @@ exports.searchCore = functions.https.onRequest({
     secrets: ["CORE_API_KEY"]
   }, (req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
-      const { query, limit = 25, offset = 0, exclude = ['fullText', 'links', 'outputs'] } = req.body;
-      
-      if (!query) {
-        return res.status(400).json({ error: 'Query is required' });
-      }
+      const { query, limit, offset } = validateCoreRequest(req.body);
 
       const response = await fetch('https://api.core.ac.uk/v3/search/works', {
         method: 'POST',
@@ -99,7 +158,8 @@ exports.searchCore = functions.https.onRequest({
         },
         body: JSON.stringify({
           q: query,
-          exclude: exclude,
+          // Fixed list: the app always sends this same list
+          exclude: ['fullText', 'links', 'outputs'],
           limit: limit,
           offset: offset,
           entity_type: "works"
@@ -107,14 +167,13 @@ exports.searchCore = functions.https.onRequest({
       });
 
       if (!response.ok) {
-        throw new Error(`Core API error: ${response.status} ${response.statusText}`);
+        throw upstreamError('CORE', response.status, await readErrorBody(response));
       }
 
       const data = await response.json();
       res.json(data);
     } catch (error) {
-      console.error('Core API error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'CORE search');
     }
   });
 });
@@ -123,15 +182,14 @@ exports.searchPubMed = functions.https.onRequest({
     secrets: ["PUBMED_API_KEY"]
   }, (req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
-      const { endpoint, params } = req.body;
-      
-      if (!endpoint || !params) {
-        return res.status(400).json({ error: 'Endpoint and params are required' });
-      }
+      // Only known PubMed endpoints and parameters are accepted
+      const { endpoint, params } = validatePubMedRequest(req.body);
 
-      const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/${endpoint}?api_key=${process.env.PUBMED_API_KEY}`;
-      
+      // The API key goes in the request body only, never in the URL
+      const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/${endpoint}`;
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -139,14 +197,13 @@ exports.searchPubMed = functions.https.onRequest({
       });
 
       if (!response.ok) {
-        throw new Error(`PubMed API error: ${response.status} ${response.statusText}`);
+        throw upstreamError('PubMed', response.status, await readErrorBody(response));
       }
 
       const data = await response.json();
       res.json(data);
     } catch (error) {
-      console.error('PubMed API error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'PubMed search');
     }
   });
 });
@@ -155,28 +212,29 @@ exports.searchElsevier = functions.https.onRequest({
     secrets: ["ELSEVIER_API_KEY"]
   }, (req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
-      const { dbKey, query, limit = 25, offset = 0 } = req.body;
-      
-      if (!dbKey || !query) {
-        return res.status(400).json({ error: 'Database key and query are required' });
-      }
+      // dbKey becomes part of the URL, so only 'scopus' and 'embase' are accepted
+      const { dbKey, query, limit, offset } = validateElsevierRequest(req.body);
 
-      const url = `https://api.elsevier.com/content/search/${dbKey}?apiKey=${process.env.ELSEVIER_API_KEY}&query=${encodeURIComponent(query)}&count=${limit}&start=${offset}`;
-      
+      // The API key goes in a header, not in the URL
+      const url = `https://api.elsevier.com/content/search/${dbKey}?query=${encodeURIComponent(query)}&count=${limit}&start=${offset}`;
+
       const response = await fetch(url, {
-        headers: { 'Accept': 'application/json' }
+        headers: {
+          'Accept': 'application/json',
+          'X-ELS-APIKey': process.env.ELSEVIER_API_KEY
+        }
       });
 
       if (!response.ok) {
-        throw new Error(`Elsevier API error: ${response.status} ${response.statusText}`);
+        throw upstreamError('Scopus/Embase', response.status, await readErrorBody(response));
       }
 
       const data = await response.json();
       res.json(data);
     } catch (error) {
-      console.error('Elsevier API error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'Elsevier search');
     }
   });
 });
@@ -186,17 +244,15 @@ exports.searchSemanticScholar = functions.https.onRequest({
   secrets: ["SEMANTIC_SCHOLAR_API_KEY"]
 }, (req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
-      const { query, limit = 25, offset = 0, fields } = req.body || {};
+      const { query, limit, offset } = validateSemanticScholarRequest(req.body);
 
-      if (!query) {
-        return res.status(400).json({ error: 'Query is required' });
-      }
-
-      const defaultFields = 'paperId,title,authors,year,citationCount,referenceCount,isOpenAccess,venue,abstract,url,fieldsOfStudy,externalIds';
+      // Fixed field list: the app always asks for these same fields
+      const fields = 'paperId,title,authors,year,citationCount,referenceCount,isOpenAccess,venue,abstract,url,fieldsOfStudy,externalIds';
       const params = new URLSearchParams({
         query: query,
-        fields: fields || defaultFields,
+        fields: fields,
         limit: String(limit),
         offset: String(offset)
       });
@@ -207,41 +263,34 @@ exports.searchSemanticScholar = functions.https.onRequest({
       //   headers['x-api-key'] = process.env.SEMANTIC_SCHOLAR_API_KEY;
       // }
 
-      const maxAttempts = 30;
-      let attempt = 0;
+      // Retry a few times on "Too Many Requests", but finish well within the
+      // function's time limit (the app also retries on its own)
+      const maxAttempts = 4;
+      const maxDelayMs = 10000;
       let apiResponse = null;
-      let last429 = false;
-      while (attempt < maxAttempts) {
-        logger.info('SemanticScholar proxy request', { query, limit, offset, url, attempt });
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        // Log sizes only: the search text can reveal a user's research topic
+        logger.info('SemanticScholar proxy request', { queryLength: query.length, limit, offset, attempt });
         apiResponse = await fetch(url, { headers });
-        if (apiResponse.status !== 429) {
-          last429 = false;
-          break;
-        }
-        last429 = true;
-        const retryAfterHeader = apiResponse.headers.get('retry-after');
-        const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
-        const baseDelayMs = !Number.isNaN(retryAfterSeconds)
-          ? retryAfterSeconds * 1000
-          : Math.min(60000, 2000 * Math.pow(2, attempt));
+        if (apiResponse.status !== 429 || attempt === maxAttempts - 1) break;
+
+        const retryAfterSeconds = Number(apiResponse.headers.get('retry-after'));
+        const baseDelayMs = retryAfterSeconds > 0
+          ? Math.min(maxDelayMs, retryAfterSeconds * 1000)
+          : Math.min(maxDelayMs, 2000 * Math.pow(2, attempt));
         const jitter = Math.floor(Math.random() * 1000);
         logger.warn('SemanticScholar returned 429, will retry', { attempt, baseDelayMs, jitter });
         await new Promise(r => setTimeout(r, baseDelayMs + jitter));
-        attempt += 1;
       }
 
-      if (last429 && apiResponse && apiResponse.status === 429) {
-        // Give up and forward the 429. Never send a status 500 for this.
-        const errorText = await apiResponse.text().catch(() => '');
-        return res.status(429).json({ error: `Upstream 429 Too Many Requests: ${errorText}` });
-      }
-
-      if (!apiResponse) {
-        return res.status(500).json({ error: 'Semantic Scholar proxy: could not get any response' });
-      }
       if (!apiResponse.ok) {
-        const errorText = await apiResponse.text().catch(() => '');
-        throw new Error(`Semantic Scholar API error: ${apiResponse.status} ${apiResponse.statusText} ${errorText}`);
+        const errorText = await readErrorBody(apiResponse);
+        // End of the results: the app treats this as "no more results"
+        if (apiResponse.status === 400 && /not available/i.test(errorText)) {
+          return res.status(400).json({ error: 'Requested results are not available.' });
+        }
+        // A final 429 is passed on as 429 (never as a 500); other errors become a safe 502
+        throw upstreamError('Semantic Scholar', apiResponse.status, errorText);
       }
 
       const data = await apiResponse.json();
@@ -249,8 +298,7 @@ exports.searchSemanticScholar = functions.https.onRequest({
       res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
       res.json(data);
     } catch (error) {
-      console.error('Semantic Scholar API error (proxy):', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'Semantic Scholar search');
     }
   });
 });
@@ -295,24 +343,46 @@ const db = admin.firestore();
 const verifyAdminAccess = async (req) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('No authorization token provided');
+    throw new HttpError(401, 'No authorization token provided');
   }
 
   const token = authHeader.split('Bearer ')[1];
-  const decodedToken = await admin.auth().verifyIdToken(token);
-  
+  let decodedToken;
+  try {
+    decodedToken = await admin.auth().verifyIdToken(token);
+  } catch (error) {
+    throw new HttpError(401, 'Your session is invalid or has expired. Please sign in again.');
+  }
+
   // Check if user is admin
   const userDoc = await db.collection('users').doc(decodedToken.uid).get();
   if (!userDoc.exists || userDoc.data().role !== 'admin') {
-    throw new Error('Insufficient permissions');
+    throw new HttpError(403, 'Insufficient permissions');
   }
-  
+
   return decodedToken;
+};
+
+// Clear, safe messages for common admin errors (shown in the admin dashboard)
+const ADMIN_ERROR_MESSAGES = new Map([
+  ['auth/email-already-exists', [409, 'A user with this email already exists.']],
+  ['auth/invalid-email', [400, 'Email is invalid']],
+  ['auth/invalid-password', [400, 'Password must be 8+ chars with upper, lower, number, symbol']],
+  ['auth/user-not-found', [404, 'User not found.']],
+]);
+
+const toAdminError = (error) => {
+  const known = ADMIN_ERROR_MESSAGES.get(error?.code);
+  if (known) return new HttpError(known[0], known[1]);
+  // Firestore "not found" when updating a user that doesn't exist
+  if (error?.code === 5 || error?.code === 'not-found') return new HttpError(404, 'User not found.');
+  return error;
 };
 
 // Get all users
 exports.getUsers = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'GET')) return;
     try {
       await verifyAdminAccess(req);
       
@@ -335,8 +405,7 @@ exports.getUsers = functions.https.onRequest((req, res) => {
       
       res.json({ users });
     } catch (error) {
-      console.error('Get users error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'Get users');
     }
   });
 });
@@ -353,20 +422,18 @@ exports.createUser = functions.https.onRequest({
   ]
 }, (req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
       await verifyAdminAccess(req);
 
-      const { email, password, displayName, accessLevel = 'free', role = 'user' } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-      }
+      // Check the input on the server too (same rules as the create-user form)
+      const { email, password, displayName, accessLevel, role } = validateCreateUserRequest(req.body);
 
       // Create user in Firebase Auth
       const userRecord = await admin.auth().createUser({
         email,
         password,
-        displayName
+        ...(displayName ? { displayName } : {})
       });
 
       // Generate a verification link
@@ -389,7 +456,7 @@ exports.createUser = functions.https.onRequest({
             html: `
               <div style="font-family: Arial, sans-serif; line-height: 1.6;">
                 <h2>Welcome to PreVue</h2>
-                <p>Hello${displayName ? ' ' + displayName : ''},</p>
+                <p>Hello${displayName ? ' ' + escapeHtml(displayName) : ''},</p>
                 <p>An administrator created an account for you. Please verify your email to activate your account:</p>
                 <p><a href="${verificationLink}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px">Verify Email</a></p>
                 <p>Or copy and paste this link into your browser:</p>
@@ -408,7 +475,7 @@ exports.createUser = functions.https.onRequest({
       // Create Firestore document
       await db.collection('users').doc(userRecord.uid).set({
         email,
-        displayName,
+        displayName: displayName || '',
         role,
         accessLevel,
         createdAt: FieldValue.serverTimestamp(),
@@ -430,8 +497,7 @@ exports.createUser = functions.https.onRequest({
         }
       });
     } catch (error) {
-      console.error('Create user error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, toAdminError(error), 'Create user');
     }
   });
 });
@@ -439,25 +505,18 @@ exports.createUser = functions.https.onRequest({
 // Update user access level
 exports.updateUserAccess = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
       await verifyAdminAccess(req);
       
-      const { userId, accessLevel, role } = req.body;
-      
-      if (!userId) {
-        return res.status(400).json({ error: 'User ID is required' });
-      }
-
-      const updateData = {};
-      if (accessLevel) updateData.accessLevel = accessLevel;
-      if (role) updateData.role = role;
+      // Only known plans ('free', 'premium') and roles ('user', 'admin') are accepted
+      const { userId, update: updateData } = validateUpdateUserAccessRequest(req.body);
 
       await db.collection('users').doc(userId).update(updateData);
 
       res.json({ success: true });
     } catch (error) {
-      console.error('Update user access error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, toAdminError(error), 'Update user access');
     }
   });
 });
@@ -465,14 +524,11 @@ exports.updateUserAccess = functions.https.onRequest((req, res) => {
 // Delete user
 exports.deleteUser = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
       await verifyAdminAccess(req);
       
-      const { userId } = req.body;
-      
-      if (!userId) {
-        return res.status(400).json({ error: 'User ID is required' });
-      }
+      const { userId } = validateDeleteUserRequest(req.body);
 
       // Delete from Firebase Auth
       await admin.auth().deleteUser(userId);
@@ -482,8 +538,7 @@ exports.deleteUser = functions.https.onRequest((req, res) => {
 
       res.json({ success: true });
     } catch (error) {
-      console.error('Delete user error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, toAdminError(error), 'Delete user');
     }
   });
 });
@@ -493,6 +548,7 @@ exports.deleteUser = functions.https.onRequest((req, res) => {
 // Admin-only backfill to enforce Firestore users schema for existing Auth users
 exports.backfillUsersSchema = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
+    if (!allowMethod(req, res, 'POST')) return;
     try {
       await verifyAdminAccess(req); 
       const results = { created: 0, updated: 0, checked: 0, errors: 0, errorSamples: [] };
@@ -577,8 +633,7 @@ exports.backfillUsersSchema = functions.https.onRequest((req, res) => {
 
       res.json({ success: true, ...results });
     } catch (error) {
-      console.error('Backfill users schema error:', error);
-      res.status(500).json({ error: error.message });
+      sendError(res, error, 'Backfill users schema');
     }
   });
 });
@@ -594,22 +649,11 @@ exports.callFanarApi = functions.https.onRequest(
   { secrets: ["FANAR_API_KEY"] },
   (req, res) => {
     return cors(req, res, async () => {
+      if (!allowMethod(req, res, 'POST')) return;
       try {
-        const { prompt, model, messages } = req.body || {};
-
-        // تقدر تستعمل prompt أو messages
-        const finalMessages =
-          Array.isArray(messages) && messages.length
-            ? messages
-            : prompt
-            ? [{ role: "user", content: String(prompt) }]
-            : null;
-
-        if (!finalMessages) {
-          return res.status(400).json({ error: "Provide either prompt or messages" });
-        }
-
-        const selectedModel = model || "Fanar-C-2-27B";
+        // Only a plain prompt and the model the app uses are accepted.
+        // A custom "messages" list is no longer accepted (the app never sends one).
+        const { prompt, model } = validateFanarRequest(req.body);
 
         const response = await fetch("https://api.fanar.qa/v1/chat/completions", {
           method: "POST",
@@ -618,27 +662,23 @@ exports.callFanarApi = functions.https.onRequest(
             "Authorization": `Bearer ${process.env.FANAR_API_KEY}`,
           },
           body: JSON.stringify({
-            model: selectedModel,
-            messages: finalMessages,
+            model,
+            messages: [{ role: "user", content: prompt }],
             temperature: 0.3,
             max_tokens: 600,
           }),
         });
 
-        const data = await response.json().catch(() => ({}));
-
         if (!response.ok) {
-          return res.status(response.status).json({
-            error: "Fanar API error",
-            details: data,
-          });
+          throw upstreamError("The AI service", response.status, await readErrorBody(response));
         }
 
+        const data = await response.json().catch(() => ({}));
         const text = data?.choices?.[0]?.message?.content ?? "";
-        return res.json({ text, raw: data });
+        // Return only the generated text, not the provider's full reply
+        return res.json({ text });
       } catch (error) {
-        console.error("Fanar API error:", error);
-        return res.status(500).json({ error: error.message });
+        return sendError(res, error, "Fanar request");
       }
     });
   }
