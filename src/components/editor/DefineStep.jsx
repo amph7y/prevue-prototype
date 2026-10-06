@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
-import PicoBuilder from './PicoBuilder.jsx';
+import ConceptBuilder from './ConceptBuilder.jsx';
 import ConceptKeywordViewer from './ConceptKeywordViewer.jsx';
 import { ArrowUturnLeftIcon, ArrowUturnRightIcon, MainSparklesIcon, PencilIcon } from '../common/Icons.jsx';
 import Spinner from '../common/Spinner.jsx';
 import logger from '../../utils/logger.js';
+import { MAX_QUESTION_CHARS, activeConcepts } from '../../utils/concepts.js';
 
 const DefineStep = ({ state, actions }) => {
-  const { researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities } = state;
+  const { researchQuestion, concepts, conceptAssist, answeringFollowUpId, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities } = state;
   const {
     setResearchQuestion,
     setConcepts,
+    setConceptAssist,
     setNegativeKeywords,
     setKeywordStyle,
     handleGenerateKeywords,
-    handleGeneratePicoFromQuestion,
+    handleAnalyzeQuestion,
+    handleAnswerFollowUp,
     setStep,
     showMenu,
     findSynonyms,
@@ -22,6 +25,7 @@ const DefineStep = ({ state, actions }) => {
   } = actions;
 
   const hasConcepts = concepts && concepts.length > 0;
+  const activeConceptCount = activeConcepts(concepts).length;
 
   const hasKeywords = concepts.some(concept => concept.keywords && concept.keywords.length > 0);
   const isFreshProject = !hasConcepts || !hasKeywords;
@@ -34,7 +38,7 @@ const DefineStep = ({ state, actions }) => {
     await logger.logConceptGenerationInitiated(null, {
       researchQuestion: researchQuestion.substring(0, 100)
     });
-    await handleGeneratePicoFromQuestion();
+    await handleAnalyzeQuestion();
   };
 
   const handleGenerateKeywordsForConcepts = async () => {
@@ -121,6 +125,7 @@ const DefineStep = ({ state, actions }) => {
             rows={3} 
             value={researchQuestion} 
             onChange={(e) => setResearchQuestion(e.target.value)} 
+            maxLength={MAX_QUESTION_CHARS}
             className="block w-full rounded-md border-gray-300 shadow-sm" 
             placeholder="e.g., What is the effectiveness of mindfulness on anxiety in healthcare professionals?" 
           />
@@ -161,26 +166,25 @@ const DefineStep = ({ state, actions }) => {
       {isFreshProject && (
         <>
           <div className="mt-10">
-            <h2 className="text-2xl font-bold">Review & Refine Concepts</h2>
+            <h2 className="text-2xl font-bold">Build Your Concepts</h2>
             <p className="mt-2 text-gray-600">
-              Review the generated PICO concepts and add or modify as needed.
+              Review the concepts the AI found, answer its questions or add your own. When you are happy with them, confirm them to generate keywords.
             </p>
             
             <div className="mt-6">
-                          <PicoBuilder
-              state={{ researchQuestion, concepts, isLoading }}
-              actions={{ setResearchQuestion, setConcepts, handleGeneratePicoFromQuestion }}
-              showOnlyConcepts={true}
-            />
+              <ConceptBuilder
+                state={{ question: researchQuestion, concepts, conceptAssist, answeringFollowUpId, isLoading }}
+                actions={{ setConcepts, setConceptAssist, handleAnswerFollowUp }}
+              />
             </div>
           </div>
 
-          {/* Generate Keywords Button for Fresh Projects */}
+          {/* Confirm Concepts Button for Fresh Projects */}
           <div className="mt-8 flex justify-center">
             <button
               type="button"
               onClick={handleGenerateKeywordsForConcepts}
-              disabled={isGeneratingKeywords || (Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject)}
+              disabled={isGeneratingKeywords || isLoading || activeConceptCount === 0 || (Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject)}
               className="inline-flex items-center rounded-md border border-transparent bg-main px-8 py-4 text-lg font-medium text-white shadow-sm hover:bg-main-dark disabled:bg-main/50 disabled:cursor-not-allowed"
             >
               {isGeneratingKeywords ? (
@@ -196,7 +200,7 @@ const DefineStep = ({ state, actions }) => {
               ) : (
                 <>
                   <MainSparklesIcon className="h-6 w-6 mr-3" />
-                  <span>Generate Keywords</span>
+                  <span>Confirm Concepts & Generate Keywords</span>
                 </>
               )}
             </button>
@@ -204,6 +208,11 @@ const DefineStep = ({ state, actions }) => {
           {(Number.isFinite(capabilities.maxKeywordGenerationsPerProject) && keywordsGenerationCount >= capabilities.maxKeywordGenerationsPerProject) && (
             <div className="mt-4 text-sm text-amber-600 bg-amber-50 p-3 rounded-md text-center">
               Keywords can only be generated up to {capabilities.maxKeywordGenerationsPerProject} times per project.
+            </div>
+          )}
+          {hasConcepts && activeConceptCount === 0 && (
+            <div className="mt-4 text-sm text-gray-600 text-center">
+              Turn on at least one concept to continue.
             </div>
           )}
         </>

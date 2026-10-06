@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { callFanarAPI } from '../../api/fanarApi.js';
+import { runConceptTask } from '../../api/fanarApi.js';
 
 
 // Config & Utils
@@ -19,13 +19,11 @@ import { getCoreCount, searchCore } from '../../api/coreApi.js';
 import { getSemanticScholarCount, searchSemanticScholar } from '../../api/semanticScholarApi.js';
 
 // Child Components & Modals
-import PicoBuilder from './PicoBuilder.jsx';
 import QueryBuilder from './QueryBuilder.jsx';
 import ResultsViewer from './ResultsViewer.jsx';
 import ArticleDetailModal from '../common/ArticleDetailModal.jsx';
 import ExportModal from '../common/ExportModal.jsx';
 
-import PicoSuggestionsModal from './PicoSuggestionsModal.jsx';
 import ThesaurusModal from './ThesaurusModal.jsx';
 import QueryRefinementModal from './QueryRefinementModal.jsx';
 import { HomeIcon, CheckIcon, DownloadIcon } from '../common/Icons.jsx';
@@ -37,6 +35,22 @@ import { generateExportFile, downloadBlob, generateExportFilename } from '../../
 import logger from '../../utils/logger.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
+import {
+    MAX_ANSWER_CHARS,
+    MAX_CONCEPTS,
+    MAX_QUESTION_CHARS,
+    activeConcepts,
+    addConcepts,
+    appendExistingConcepts,
+    applyKeywordResults,
+    buildAiContext,
+    buildKeywordRequest,
+    countKeywords,
+    emptyConceptAssist,
+    makeConceptAssist,
+    normalizeConceptAssist,
+    normalizeLoadedConcepts,
+} from '../../utils/concepts.js';
 
 function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSignup, onLogin, userId }) {
     const { userAccessLevel } = useAuth();
@@ -88,7 +102,9 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
     const [enabledControlledVocabTypes, setEnabledControlledVocabTypes] = useState({ mesh: true });
 
     // State for Modals
-    const [picoSuggestions, setPicoSuggestions] = useState({ isOpen: false, category: null, suggestions: [], loading: false });
+    // AI follow-up questions and suggested concepts for Step 1
+    const [conceptAssist, setConceptAssist] = useState(emptyConceptAssist);
+    const [answeringFollowUpId, setAnsweringFollowUpId] = useState(null);
     const [thesaurusData, setThesaurusData] = useState({ isOpen: false, word: '', synonyms: [], loading: false, context: null });
     const [refineModalData, setRefineModalData] = useState(null);
 
@@ -106,7 +122,8 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
             try {
                 const savedDraft = JSON.parse(localStorage.getItem('prevue_guest_project') || '{}');
                 setResearchQuestion(savedDraft.researchQuestion || '');
-                setConcepts(Array.isArray(savedDraft.concepts) ? savedDraft.concepts : []);
+                setConcepts(normalizeLoadedConcepts(savedDraft.concepts));
+                setConceptAssist(normalizeConceptAssist(savedDraft.conceptAssist));
                 setNegativeKeywords(savedDraft.negativeKeywords || ['']);
                 setKeywordStyle(savedDraft.keywordStyle || 'balanced');
                 setConceptsGenerated(savedDraft.conceptsGenerated || false);
@@ -126,8 +143,8 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                 const data = docSnap.data();
                 setResearchQuestion(data.researchQuestion || '');
 
-                let loadedConcepts = data.concepts || [];
-                setConcepts(loadedConcepts);
+                setConcepts(normalizeLoadedConcepts(data.concepts));
+                setConceptAssist(normalizeConceptAssist(data.conceptAssist));
                 setNegativeKeywords(data.negativeKeywords || ['']);
                 setKeywordStyle(data.keywordStyle || 'balanced');
 
@@ -154,6 +171,7 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                         keywordsGenerated,
                         conceptsGenerationCount,
                         keywordsGenerationCount,
+                        conceptAssist,
                         lastSaved: new Date().toISOString()
                     }));
                 } catch (error) {
@@ -173,12 +191,13 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                 keywordsGenerated,
                 conceptsGenerationCount,
                 keywordsGenerationCount,
+                conceptAssist,
                 lastSaved: serverTimestamp()
             };
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
         return () => clearTimeout(debounceTimeout.current);
-    }, [researchQuestion, concepts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId, isGuestProject]);
+    }, [researchQuestion, concepts, conceptAssist, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId, isGuestProject]);
 
     useEffect(() => {
         if (step === 2) {
@@ -217,8 +236,16 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
         setThesaurusData({ isOpen: false, word: '', synonyms: [], loading: false, context: null });
     };
 
-    const handleGeneratePicoFromQuestion = async () => {
-        if (!researchQuestion.trim()) return toast.error('Please enter a research question first.');
+    // Optional project details that help the AI understand the question
+    const aiContext = () => buildAiContext(project, negativeKeywords);
+
+    // The AI finds the concepts in the question, suggests related concepts and asks follow-up questions
+    const handleAnalyzeQuestion = async () => {
+        const question = researchQuestion.trim();
+        if (!question) return toast.error('Please enter a research question first.');
+        if (question.length > MAX_QUESTION_CHARS) {
+            return toast.error(`Please shorten your question to ${MAX_QUESTION_CHARS} characters or fewer.`);
+        }
 
         // Check if concepts generation exceeds limit for this project
         const maxConcepts = capabilities.maxConceptGenerationsPerProject;
@@ -227,248 +254,89 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
         }
 
         setIsLoading(true);
-
-        // Extract project data for the prompt
-        const projectType = project.projectType || '';
-        const discipline = project.discipline || '';
-        const desiredOutcomes = project.outcomesNeeded || '';
-        const undesiredOutcomes = project.outcomesNotNeeded || negativeKeywords.filter(k => k.trim() !== '').join(', ') || '';
-        const questionTemplate = project.questionTemplate || '';
-
-        const prompt = `You are an expert information specialist in academic information retrieval, systematic reviews, and database query design.
-
-You are part of ReVue's AI engine, helping researchers build reproducible and context-aware search strategies.
-
- 
-
-Your objective:
-
-1. Identify the key searchable concepts within a research question.
-
-2. Generate academically relevant, diverse search terms for each concept.
-
-3. Output ONLY valid JSON — no commentary or text outside JSON.
-
- 
-
-The process occurs in two independent stages.
-
- 
-
-===========================================================
-
-🔸 STAGE 1: CONCEPT EXTRACTION
-
-===========================================================
-
- 
-
-Analyze the following research question and contextual details to identify its core searchable concepts.
-
- 
-
-Use the provided question framework (if available) to label concepts appropriately.  
-
-If none is given, infer the most logical conceptual breakdown (e.g., PICO, SPIDER, CIMO, SPICE, PCC, or ECLIPSE).  
-
-Only include meaningful and specific concepts directly related to the research question — exclude generic words such as "effect," "impact," or "relationship."
-
- 
-
-If contextual project details are available, use them to improve accuracy and relevance:
-
-- Project Type (study design): adapt the concept framing (e.g., "systematic review" → measurable outcomes and clear interventions).
-
-- Discipline: use domain-specific interpretation (e.g., "pharmacy" → clinical, pharmacological terminology).
-
-- Desired Outcomes: prioritize identifying or weighting concepts related to these outcomes.
-
-- Undesired Outcomes (exclusions): avoid including these in the extracted concepts.
-
-- Question Template: adapt structure accordingly (e.g., PICO → Population, Intervention, Comparison, Outcome).
-
- 
-
-Do NOT use Project Title (it may be generic or irrelevant).  
-
-Do NOT fabricate missing data — only use what is provided.
-
- 
-
-────────────────────────────
-
-Context:
-
-- Research Question: ${researchQuestion}
-
-- Project Type: ${projectType || '(optional)'}
-
-- Discipline: ${discipline || '(optional)'}
-
-- Desired Outcomes: ${desiredOutcomes || '(optional)'}
-
-- Undesired Outcomes: ${undesiredOutcomes || '(optional)'}
-
-- Question Template: ${questionTemplate || '(optional)'}
-
-────────────────────────────
-
- 
-
-Return ONLY valid JSON in the following format:
-
-{
-
-  "concepts": [
-
-    { "name": "Concept Name", "value": "Extracted Concept" }
-
-  ]
-
-}
-
- 
-
-────────────────────────────
-
-Example Input:
-
-{
-
-  "research_question": "What is the effectiveness of mindfulness-based therapy on anxiety among healthcare professionals?",
-
-  "project_type": "systematic review",
-
-  "discipline": "public health",
-
-  "desired_outcomes": ["reduction in anxiety", "mental wellbeing improvement"],
-
-  "undesired_outcomes": ["children", "animal studies"],
-
-  "question_template": "PICO"
-
-}
-
- 
-
-Example Output:
-
-{
-
-  "concepts": [
-
-    { "name": "Population", "value": "healthcare professionals" },
-
-    { "name": "Intervention", "value": "mindfulness-based therapy" },
-
-    { "name": "Outcome", "value": "anxiety reduction" }
-
-  ]
-
-}
-
- 
-
-===========================================================
-
-🔸 OUTPUT RULES
-
-===========================================================
-
-- Always output structured, valid JSON.
-
-- Never include explanations, commentary, or additional text outside JSON.
-
-- Maintain consistent key names exactly as shown.
-
-- If any optional detail (discipline, project type, outcomes) is missing, ignore it — do NOT infer or invent replacements.
-
- 
-
-===========================================================
-
-🔸 REMINDER
-
-===========================================================
-
-Your role is to support reproducible academic research.  
-
-Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
-
         try {
-            const result = await callFanarAPI(prompt);
+            const result = await runConceptTask('analyzeQuestion', { question, context: aiContext() });
+            const found = (result.concepts || []).map((concept) => ({
+                name: concept.name,
+                questionText: concept.text,
+                source: 'question',
+            }));
+            // Concepts come from the question; concepts the researcher typed in are kept
+            const nextConcepts = appendExistingConcepts(
+                addConcepts([], found).concepts,
+                concepts.filter((concept) => concept.source === 'manual')
+            );
 
-            const generatedConcepts = [];
-
-            if (result.concepts && Array.isArray(result.concepts)) {
-                result.concepts.forEach((concept, index) => {
-                    let conceptType = "custom";
-                    const nameLower = concept.name.toLowerCase();
-
-                    if (nameLower.includes("population")) conceptType = "population";
-                    else if (nameLower.includes("intervention")) conceptType = "intervention";
-                    else if (nameLower.includes("comparison")) conceptType = "comparison";
-                    else if (nameLower.includes("outcome")) conceptType = "outcome";
-
-                    generatedConcepts.push({
-                        id: `concept_${Date.now()}_${index}`,
-                        name: concept.value,
-                        type: conceptType,
-                        synonyms: [],
-                        keywords: [],
-                        controlled_vocabulary: [],
-                    });
-                });
-            }
-
-            setConcepts(generatedConcepts);
+            setConcepts(nextConcepts);
+            setConceptAssist(makeConceptAssist(question, result, nextConcepts));
             setConceptsGenerated(true);
             setConceptsGenerationCount((prev) => prev + 1);
 
-            toast.success("Concepts generated from your research question!");
+            if (found.length === 0) {
+                toast("The AI couldn't find clear concepts. Add them yourself, or rephrase your question.");
+            } else {
+                toast.success('Concepts found in your question!');
+            }
         } catch (err) {
-            handleError(err, "concept generation");
-        }
-        finally {
+            handleError(err, 'concept generation');
+        } finally {
             setIsLoading(false);
         }
     };
 
-    const handleSuggestPicoTerms = async (category) => {
-        const picoLabels = { p: 'Population', i: 'Intervention', c: 'Comparison', o: 'Outcome' };
-        const contextPico = { ...pico };
-        delete contextPico[category];
-        const contextText = Object.entries(contextPico).map(([key, value]) => Array.isArray(value) && value.join(' ').trim() ? `${picoLabels[key]}: ${value.join('; ')}` : null).filter(Boolean).join('\n');
-        if (contextText.trim() === '') return toast.error('Please fill in at least one other PICO field for context.');
+    // The researcher answers an AI follow-up question; the answer becomes new concepts.
+    // Returns true when the answer was used.
+    const handleAnswerFollowUp = async (followUpId, answerText) => {
+        const answer = (answerText || '').trim();
+        const followUp = conceptAssist.followUps.find((f) => f.id === followUpId);
+        if (!followUp || !answer) return false;
+        if (answer.length > MAX_ANSWER_CHARS) {
+            toast.error(`Please keep your answer to ${MAX_ANSWER_CHARS} characters or fewer.`);
+            return false;
+        }
+        if (concepts.length >= MAX_CONCEPTS) {
+            toast.error(`You can have up to ${MAX_CONCEPTS} concepts. Remove or join some to add more.`);
+            return false;
+        }
 
-        setPicoSuggestions({ isOpen: true, category, suggestions: [], loading: true });
-        const prompt = `Given the PICO context for a systematic review:\n${contextText}\n\nSuggest 5-7 specific terms or short phrases for the "${picoLabels[category]}" component. Return ONLY a raw JSON array of strings.`;
+        setAnsweringFollowUpId(followUpId);
         try {
-            const suggestions = await callFanarAPI(prompt);
-            setPicoSuggestions(prev => ({ ...prev, suggestions: Array.isArray(suggestions) ? suggestions : [], loading: false }));
+            const result = await runConceptTask('conceptsFromAnswer', {
+                question: researchQuestion.trim(),
+                followUp: followUp.question,
+                answer,
+                existingConcepts: concepts.map((c) => c.name),
+                context: aiContext(),
+            });
+            const items = (result.concepts || []).map((name) => ({ name, source: 'answer' }));
+            const preview = addConcepts(concepts, items);
+            setConcepts((prev) => addConcepts(prev, items).concepts);
+            setConceptAssist((prev) => ({
+                ...prev,
+                followUps: prev.followUps.map((f) => (f.id === followUpId ? { ...f, answer, status: 'answered' } : f)),
+            }));
+
+            const addedCount = preview.added + preview.reactivated;
+            if (addedCount > 0) {
+                toast.success(`Added ${addedCount} concept${addedCount === 1 ? '' : 's'} from your answer.`);
+            } else if (preview.overLimit > 0) {
+                toast.error(`You can have up to ${MAX_CONCEPTS} concepts. Remove or join some to add more.`);
+            } else {
+                toast('No new concepts were found in your answer.');
+            }
+            return true;
         } catch (err) {
-            handleError(err, 'PICO suggestions');
-            setPicoSuggestions({ isOpen: false, category: null, suggestions: [], loading: false });
+            handleError(err, 'follow-up answer');
+            return false;
+        } finally {
+            setAnsweringFollowUpId(null);
         }
     };
 
-    const handleAddSuggestionToPico = (suggestion, category) => {
-        setPico(prev => {
-            const newCategoryValues = [...prev[category]];
-            const lastIndex = newCategoryValues.length - 1;
-            if (lastIndex >= 0 && newCategoryValues[lastIndex].trim() === '') {
-                newCategoryValues[lastIndex] = suggestion;
-            } else {
-                newCategoryValues.push(suggestion);
-            }
-            return { ...prev, [category]: newCategoryValues };
-        });
-        setPicoSuggestions({ isOpen: false, category: null, suggestions: [], loading: false });
-    };
-
     const handleGenerateKeywords = async (conceptsData = concepts, keywordStyle = 'balanced') => {
-        if (!conceptsData || !Array.isArray(conceptsData) || conceptsData.length === 0) {
-            return toast.error('No concepts defined. Please generate PICO concepts first.');
+        const allConcepts = Array.isArray(conceptsData) ? conceptsData : [];
+        if (activeConcepts(allConcepts).length === 0) {
+            return toast.error('No concepts are turned on. Add or turn on at least one concept first.');
         }
 
         // Check if keywords generation exceeds limit for this project
@@ -479,294 +347,22 @@ Focus on accuracy, domain-specific sensitivity, and terminological relevance.`;
 
         setIsLoading(true);
         try {
-            // Extract project data for the prompt
-            const projectType = project.projectType || '';
-            const discipline = project.discipline || '';
-            const desiredOutcomes = project.outcomesNeeded || '';
-            const undesiredOutcomes = project.outcomesNotNeeded || negativeKeywords.filter(k => k.trim() !== '').join(', ') || '';
-
-            // Prepare concepts in the format expected by STAGE 2
-            // We need to determine the concept name (label) from the concept type
-            const conceptsForPrompt = conceptsData.map(concept => {
-                // Determine concept label based on type
-                let conceptLabel = concept.name; // Default to the concept name
-                const typeLower = (concept.type || '').toLowerCase();
-
-                if (typeLower === 'population') {
-                    conceptLabel = 'Population';
-                } else if (typeLower === 'intervention') {
-                    conceptLabel = 'Intervention';
-                } else if (typeLower === 'comparison') {
-                    conceptLabel = 'Comparison';
-                } else if (typeLower === 'outcome') {
-                    conceptLabel = 'Outcome';
-                }
-
-                return {
-                    name: conceptLabel,
-                    value: concept.name
-                };
+            // The server writes the AI instructions; concepts are matched back by id
+            const { requestConcepts, idMap } = buildKeywordRequest(allConcepts);
+            const result = await runConceptTask('generateKeywords', {
+                question: researchQuestion.trim(),
+                concepts: requestConcepts,
+                style: keywordStyle,
+                vocabulary: { mesh: Boolean(selectedDBs.pubmed), emtree: Boolean(selectedDBs.embase) },
+                context: aiContext(),
             });
 
-            // Determine number of terms based on keyword style
-            let numTerms = 5; // balanced default
-            if (keywordStyle === 'focused') {
-                numTerms = 3;
-            } else if (keywordStyle === 'comprehensive') {
-                numTerms = 10;
+            const updatedConcepts = applyKeywordResults(allConcepts, result.concepts, idMap);
+            const totalKeywords = countKeywords(updatedConcepts);
+            if (totalKeywords === 0) {
+                // Nothing usable came back, so this attempt doesn't count toward the limit
+                return toast.error("The AI didn't return any keywords. Please try again.");
             }
-
-            let vocabInstructions = '';
-            if (selectedDBs.pubmed) {
-                vocabInstructions += 'Generate 2-3 relevant MeSH terms, where each is an object like {"term": "Term Name", "type": "MeSH"}. ';
-            }
-            if (selectedDBs.embase) {
-                vocabInstructions += 'Generate 2-3 relevant Emtree terms, where each is an object like {"term": "Term Name", "type": "Emtree"}. ';
-            }
-            if (!selectedDBs.pubmed && !selectedDBs.embase) {
-                vocabInstructions = 'The "controlled_vocabulary" array must be empty.';
-            }
-
-            const prompt = `You are an expert information specialist in academic information retrieval, systematic reviews, and database query design.
-
-You are part of ReVue's AI engine, helping researchers build reproducible and context-aware search strategies.
-
- 
-
-===========================================================
-
-🔸 STAGE 2: TERM EXPANSION
-
-===========================================================
-
- 
-
-Using the provided confirmed concepts, generate up to ${numTerms} relevant academic search terms or synonyms for each concept.
-
- 
-
-Guidelines:
-
-- Use the context (discipline, study design, desired/undesired outcomes) to guide term selection.
-
-- Include common synonyms, abbreviations, and controlled vocabulary equivalents (e.g., MeSH, Emtree).
-
-- Exclude any terms matching undesired outcomes or concepts.
-
-- Maintain diversity and precision — avoid redundancy.
-
-- Do NOT fabricate unrelated or non-academic terms.
-
-- Return ONLY valid JSON.
-
- 
-
-────────────────────────────
-
-Context:
-
-- Research Question: ${researchQuestion}
-
-- Project Type: ${projectType || '(optional)'}
-
-- Discipline: ${discipline || '(optional)'}
-
-- Desired Outcomes: ${desiredOutcomes || '(optional)'}
-
-- Undesired Outcomes: ${undesiredOutcomes || '(optional)'}
-
-────────────────────────────
-
- 
-
-User-confirmed concepts:
-
-${JSON.stringify(conceptsForPrompt, null, 2)}
-
- 
-
-────────────────────────────
-
-Return format:
-
-{
-
-  "concept_terms": [
-
-    {
-
-      "concept": "Concept Name",
-
-      "terms": ["term1", "term2", "term3", "term4", "term5"]
-
-    }
-
-  ]
-
-}
-
- 
-
-────────────────────────────
-
-Example Input:
-
-{
-
-  "research_question": "What is the effectiveness of mindfulness-based therapy on anxiety among healthcare professionals?",
-
-  "project_type": "systematic review",
-
-  "discipline": "public health",
-
-  "desired_outcomes": ["reduction in anxiety", "mental wellbeing improvement"],
-
-  "undesired_outcomes": ["children", "animal studies"],
-
-  "concepts": [
-
-    { "name": "Population", "value": "healthcare professionals" },
-
-    { "name": "Intervention", "value": "mindfulness-based therapy" },
-
-    { "name": "Outcome", "value": "anxiety reduction" }
-
-  ]
-
-}
-
- 
-
-Example Output:
-
-{
-
-  "concept_terms": [
-
-    {
-
-      "concept": "Population",
-
-      "terms": ["healthcare workers", "nurses", "clinicians", "medical staff", "hospital personnel"]
-
-    },
-
-    {
-
-      "concept": "Intervention",
-
-      "terms": ["mindfulness", "mindfulness-based stress reduction", "MBSR", "meditation training", "mindfulness intervention"]
-
-    },
-
-    {
-
-      "concept": "Outcome",
-
-      "terms": ["anxiety", "stress reduction", "emotional regulation", "psychological distress", "mental wellbeing"]
-
-    }
-
-  ]
-
-}
-
- 
-
-===========================================================
-
-🔸 OUTPUT RULES
-
-===========================================================
-
-- Always output structured, valid JSON.
-
-- Never include explanations, commentary, or additional text outside JSON.
-
-- Maintain consistent key names exactly as shown.
-
-- If any optional detail (discipline, project type, outcomes) is missing, ignore it — do NOT infer or invent replacements.
-
- 
-
-===========================================================
-
-🔸 REMINDER
-
-===========================================================
-
-Your role is to support reproducible academic research.  
-
-Focus on accuracy, domain-specific sensitivity, and terminological relevance.
-
- 
-
-${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor controlled vocabulary, include it in a separate "controlled_vocabulary" field for each concept in the concept_terms array.` : ''}`;
-
-            const result = await callFanarAPI(prompt);
-
-            // Process the result - it should have concept_terms array
-            const updatedConcepts = conceptsData.map(concept => {
-                // Find matching concept term data
-                let conceptTermData = null;
-                if (result.concept_terms && Array.isArray(result.concept_terms)) {
-                    // Try to match by concept name or by concept type
-                    const typeLower = (concept.type || '').toLowerCase();
-                    let conceptLabel = concept.name;
-
-                    if (typeLower === 'population') {
-                        conceptLabel = 'Population';
-                    } else if (typeLower === 'intervention') {
-                        conceptLabel = 'Intervention';
-                    } else if (typeLower === 'comparison') {
-                        conceptLabel = 'Comparison';
-                    } else if (typeLower === 'outcome') {
-                        conceptLabel = 'Outcome';
-                    }
-
-                    conceptTermData = result.concept_terms.find(ct =>
-                        ct.concept === conceptLabel ||
-                        ct.concept === concept.name ||
-                        ct.concept?.toLowerCase() === conceptLabel.toLowerCase()
-                    );
-                }
-
-                let keywords = [];
-                let controlled_vocabulary = [];
-
-                if (conceptTermData) {
-                    keywords = Array.isArray(conceptTermData.terms) ? conceptTermData.terms : [];
-                    controlled_vocabulary = Array.isArray(conceptTermData.controlled_vocabulary) ? conceptTermData.controlled_vocabulary : [];
-                }
-
-                // Fallback: try to find by concept name in result (old format compatibility)
-                if (keywords.length === 0 && result[concept.name]) {
-                    const conceptData = result[concept.name];
-                    if (Array.isArray(conceptData)) {
-                        keywords = conceptData;
-                    } else if (conceptData && typeof conceptData === 'object') {
-                        keywords = Array.isArray(conceptData.keywords) ? conceptData.keywords : [];
-                        controlled_vocabulary = Array.isArray(conceptData.controlled_vocabulary) ? conceptData.controlled_vocabulary : [];
-                    }
-                }
-
-                const updatedConcept = {
-                    ...concept,
-                    keywords: keywords.map(term => ({
-                        term,
-                        active: true,
-                        source: 'ai',
-                        searchField: 4
-                    })),
-                    controlled_vocabulary: controlled_vocabulary.map(item => ({
-                        ...item,
-                        active: true,
-                        source: 'ai'
-                    }))
-                };
-
-                return updatedConcept;
-            });
 
             setConcepts(updatedConcepts);
             setKeywordsGenerated(true);
@@ -777,12 +373,11 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                 projectId: project.id,
                 projectName: project.name,
                 keywordStyle,
-                conceptsCount: conceptsData.length,
-                totalKeywords: updatedConcepts.reduce((sum, concept) => sum + concept.keywords.length, 0)
+                conceptsCount: requestConcepts.length,
+                totalKeywords
             });
 
             toast.success(`Keywords generated with ${keywordStyle} style!`);
-
         } catch (err) {
             handleError(err, 'keyword generation');
         } finally {
@@ -790,56 +385,17 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
         }
     };
 
-    const handleTestParameters = () => {
-        const testConcepts = [
-            {
-                id: "pico_p_test",
-                name: "adults with hypertension",
-                type: "population",
-                synonyms: ["adults", "hypertension"],
-                keywords: [],
-                controlled_vocabulary: []
-            },
-            {
-                id: "pico_i_test",
-                name: "telemedicine",
-                type: "intervention",
-                synonyms: ["telemedicine"],
-                keywords: [],
-                controlled_vocabulary: []
-            },
-            {
-                id: "pico_c_test",
-                name: "usual care",
-                type: "comparison",
-                synonyms: ["usual care"],
-                keywords: [],
-                controlled_vocabulary: []
-            },
-            {
-                id: "pico_o_test",
-                name: "blood pressure control",
-                type: "outcome",
-                synonyms: ["blood pressure control"],
-                keywords: [],
-                controlled_vocabulary: []
-            }
-        ];
-        const testRQ = "In adults with hypertension, is telemedicine effective compared to usual care for blood pressure control?";
-        setConcepts(testConcepts);
-        setResearchQuestion(testRQ);
-        toast("Test parameters loaded!");
-    };
-
     const generateSingleQuery = (dbKey, enabledTypes = {}) => {
-        if (!concepts || concepts.length === 0) return '';
+        // Concepts the researcher turned off are left out of the search
+        const usableConcepts = activeConcepts(concepts);
+        if (usableConcepts.length === 0) return '';
         const { syntax } = DB_CONFIG[dbKey];
 
         // Special handling for Semantic Scholar: keep it short and natural-language-like
         if (dbKey === 'semanticScholar') {
             // Prefer concept names; fallback to first active keyword per concept
             const phrases = [];
-            concepts.forEach(concept => {
+            usableConcepts.forEach(concept => {
                 const name = (concept.name || '').trim();
                 if (name) phrases.push(`"${name}"`);
                 if (phrases.length >= 6) return; // cap early if enough terms collected
@@ -861,7 +417,7 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
 
         const parts = [];
 
-        concepts.forEach(concept => {
+        usableConcepts.forEach(concept => {
             if (!concept.keywords || concept.keywords.length === 0) return;
 
             let activeTerms = [];
@@ -1269,11 +825,6 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                 onClose={() => setThesaurusData({ isOpen: false, word: '', synonyms: [], loading: false, context: null })}
                 onAddSynonym={handleAddSynonym}
             />
-            <PicoSuggestionsModal
-                suggestionsState={picoSuggestions}
-                onClose={() => setPicoSuggestions({ isOpen: false, category: null, suggestions: [], loading: false })}
-                onAddSuggestion={handleAddSuggestionToPico}
-            />
             <QueryRefinementModal
                 modalData={refineModalData}
                 onClose={() => setRefineModalData(null)}
@@ -1308,8 +859,8 @@ ${vocabInstructions ? `\n\nAdditional Instructions:\n${vocabInstructions}\n\nFor
                             >
                                 {step === 1 && (
                                     <DefineStep
-                                        state={{ researchQuestion, concepts, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities }}
-                                        actions={{ setResearchQuestion, setConcepts, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleGeneratePicoFromQuestion, setStep, showMenu, findSynonyms, onBackToDashboard }}
+                                        state={{ researchQuestion, concepts, conceptAssist, answeringFollowUpId, isLoading, negativeKeywords, keywordGenerationStyles, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, capabilities }}
+                                        actions={{ setResearchQuestion, setConcepts, setConceptAssist, setNegativeKeywords, setKeywordStyle, handleGenerateKeywords, handleAnalyzeQuestion, handleAnswerFollowUp, setStep, showMenu, findSynonyms, onBackToDashboard }}
                                     />
                                 )}
                                 {step === 2 && (

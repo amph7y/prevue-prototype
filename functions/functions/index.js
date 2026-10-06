@@ -25,7 +25,9 @@ const {
   validateCreateUserRequest,
   validateUpdateUserAccessRequest,
   validateDeleteUserRequest,
+  validateConceptTaskRequest,
 } = require('./validation');
+const { AiResponseError, buildConceptTaskPrompt, readConceptTaskResult } = require('./conceptTasks');
 
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected
@@ -68,7 +70,7 @@ const allowMethod = (req, res, method) => {
 
 // Send a safe error to the browser. Details stay in the server logs only.
 const sendError = (res, error, context) => {
-  if (error instanceof ValidationError || error instanceof HttpError) {
+  if (error instanceof ValidationError || error instanceof HttpError || error instanceof AiResponseError) {
     return res.status(error.status).json({ error: error.message });
   }
   logger.error(`${context} failed`, { name: error?.name, message: error?.message });
@@ -645,36 +647,61 @@ exports.healthCheck = functions.https.onRequest((req, res) => {
   });
 });
 
+const FANAR_DEFAULT_MODEL = "Fanar-C-2-27B";
+
+// Sends instructions to Fanar and returns only the reply text
+const askFanar = async (prompt, { model = FANAR_DEFAULT_MODEL, maxTokens }) => {
+  const response = await fetch("https://api.fanar.qa/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.FANAR_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    throw upstreamError("The AI service", response.status, await readErrorBody(response));
+  }
+
+  const data = await response.json().catch(() => ({}));
+  return data?.choices?.[0]?.message?.content ?? "";
+};
+
 exports.callFanarApi = functions.https.onRequest(
-  { secrets: ["FANAR_API_KEY"] },
+  // Keyword replies can be long, so allow up to 2 minutes
+  { secrets: ["FANAR_API_KEY"], timeoutSeconds: 120 },
   (req, res) => {
     return cors(req, res, async () => {
       if (!allowMethod(req, res, 'POST')) return;
       try {
-        // Only a plain prompt and the model the app uses are accepted.
-        // A custom "messages" list is no longer accepted (the app never sends one).
-        const { prompt, model } = validateFanarRequest(req.body);
-
-        const response = await fetch("https://api.fanar.qa/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${process.env.FANAR_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.3,
-            max_tokens: 600,
-          }),
-        });
-
-        if (!response.ok) {
-          throw upstreamError("The AI service", response.status, await readErrorBody(response));
+        // Step 1 AI tasks: the server writes the AI instructions and checks the reply
+        if (req.body && typeof req.body === 'object' && req.body.task !== undefined) {
+          const task = validateConceptTaskRequest(req.body);
+          const { prompt, maxTokens } = buildConceptTaskPrompt(task);
+          const text = await askFanar(prompt, { maxTokens });
+          try {
+            return res.json({ data: readConceptTaskResult(task, text) });
+          } catch (error) {
+            // Log only the size: the reply can contain the researcher's content
+            logger.warn('Fanar task reply could not be used', {
+              task: task.task,
+              length: typeof text === 'string' ? text.length : 0,
+            });
+            throw error;
+          }
         }
 
-        const data = await response.json().catch(() => ({}));
-        const text = data?.choices?.[0]?.message?.content ?? "";
+        // Older mode: the browser sends its own prompt. The new website no longer uses it,
+        // so it can be switched off once the new website is live everywhere.
+        // Only a plain prompt and the model the app uses are accepted.
+        const { prompt, model } = validateFanarRequest(req.body);
+        const text = await askFanar(prompt, { model, maxTokens: 600 });
         // Return only the generated text, not the provider's full reply
         return res.json({ text });
       } catch (error) {

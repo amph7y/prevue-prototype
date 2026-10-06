@@ -28,3 +28,24 @@ export async function callFanarAPI(prompt, model = "Fanar-C-2-27B") {
     const data = await response.json(); // { text, raw }
     return safeJsonParse(data.text);
 }
+
+// Step 1 AI tasks: 'analyzeQuestion', 'conceptsFromAnswer' and 'generateKeywords'.
+// The server writes the AI instructions and checks the AI's reply; the browser only sends data.
+export async function runConceptTask(task, payload = {}) {
+    const response = await fetch(FANAR_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, task }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API error: ${response.status}`);
+    }
+
+    const result = await response.json().catch(() => null);
+    if (!result || typeof result.data !== "object" || result.data === null) {
+        throw new Error("The AI returned an unexpected response.");
+    }
+    return result.data;
+}
