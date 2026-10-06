@@ -296,19 +296,18 @@ const QueryBuilder = ({ state, actions }) => {
                                                 return;
                                             }
 
-                                            // Build modal data expected by QueryRefinementModal
-                                            const keywordsObject = {
-                                                population: { keywords: [], controlled_vocabulary: [] },
-                                                intervention: { keywords: [], controlled_vocabulary: [] },
-                                                comparison: { keywords: [], controlled_vocabulary: [] },
-                                                outcome: { keywords: [], controlled_vocabulary: [] }
-                                            };
-                                            (concepts || []).forEach(concept => {
-                                                const cat = concept.type || 'population';
-                                                if (!keywordsObject[cat]) keywordsObject[cat] = { keywords: [], controlled_vocabulary: [] };
-                                                keywordsObject[cat].keywords = Array.isArray(concept.keywords) ? concept.keywords : [];
-                                                keywordsObject[cat].controlled_vocabulary = Array.isArray(concept.controlled_vocabulary) ? concept.controlled_vocabulary : [];
-                                            });
+                                            // Build modal data expected by QueryRefinementModal:
+                                            // one group per concept that is turned on and has keywords, in order
+                                            const keywordsObject = {};
+                                            (concepts || [])
+                                                .filter(concept => concept && concept.active !== false && Array.isArray(concept.keywords) && concept.keywords.length > 0)
+                                                .forEach(concept => {
+                                                    keywordsObject[concept.id] = {
+                                                        label: concept.name,
+                                                        keywords: concept.keywords,
+                                                        controlled_vocabulary: Array.isArray(concept.controlled_vocabulary) ? concept.controlled_vocabulary : []
+                                                    };
+                                                });
 
                                             const modalData = {
                                                 dbKey: activeTab,
@@ -367,7 +366,7 @@ const QueryBuilder = ({ state, actions }) => {
                                         className="block w-full rounded-md border-blue-200 bg-blue-50 font-mono text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none" 
                                         value={queries[activeTab] || ''} 
                                         readOnly 
-                                        placeholder="Query will be generated based on your PICO concepts and selected options..."
+                                        placeholder="Query will be generated based on your concepts and selected options..."
                                     />
                                 </div>
                             </div>

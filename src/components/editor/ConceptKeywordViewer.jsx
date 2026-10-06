@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { cn } from '../../utils/cn.js';
 import { BookOpenIcon } from '../common/Icons.jsx';
 import { UNIFIED_SEARCH_FIELDS } from '../../config/dbConfig.js';
+import { conceptRoleLabel, getConceptColor, isActive } from '../../utils/concepts.js';
 
 const ConceptKeywordViewer = ({ concepts, actions }) => {
     const { setConcepts, showMenu, findSynonyms } = actions;
@@ -17,16 +18,8 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
         }));
     };
 
-    const getCategoryLabel = (type) => {
-        const labels = {
-            'population': 'Population',
-            'intervention': 'Intervention', 
-            'comparison': 'Comparison',
-            'outcome': 'Outcome',
-            'custom': 'Custom Concept'
-        };
-        return labels[type] || type;
-    };
+    // Older projects show their PICO role; new concepts have no role label
+    const getCategoryLabel = (type) => conceptRoleLabel(type);
 
     const handleKeywordToggle = (conceptId, type, index) => {
         setConcepts(prev => prev.map(concept => {
@@ -159,19 +152,22 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
     return (
         <div className="mt-10">
             <div className="mt-6 space-y-8">
-                {concepts.map((concept) => {
-                    if (!concept.keywords || concept.keywords.length === 0) return null;
+                {concepts.map((concept, index) => {
+                    if (!isActive(concept) || !concept.keywords || concept.keywords.length === 0) return null;
                     
                     return (
                         <div key={concept.id} className="rounded-lg border bg-white p-6 shadow-sm">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <h3 className="text-xl font-semibold text-gray-800">
+                                    <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                                        <span className={cn('inline-block h-3 w-3 rounded-full', getConceptColor(concept, index).dot)} aria-hidden="true" />
                                         {concept.name}
                                     </h3>
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        {getCategoryLabel(concept.type)}
-                                    </p>
+                                    {getCategoryLabel(concept.type) && (
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            {getCategoryLabel(concept.type)}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             
@@ -220,12 +216,14 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                         </div>
                         <div className="p-5 max-h-[70vh] overflow-auto">
                             <div className="space-y-3">
-                                {concepts.filter(c => c.keywords?.length > 0).map((concept) => (
+                                {concepts.filter(c => isActive(c) && c.keywords?.length > 0).map((concept) => (
                                     <div key={concept.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
                                         <div className="flex items-center justify-between mb-3">
                                             <div>
                                                 <h4 className="font-semibold text-gray-800">{concept.name}</h4>
-                                                <p className="text-xs text-gray-500 mt-0.5">{getCategoryLabel(concept.type)}</p>
+                                                {getCategoryLabel(concept.type) && (
+                                                    <p className="text-xs text-gray-500 mt-0.5">{getCategoryLabel(concept.type)}</p>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex gap-2">

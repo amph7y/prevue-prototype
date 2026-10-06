@@ -246,9 +246,142 @@ function validateDeleteUserRequest(body) {
   return { userId: validateUserId(userId) };
 }
 
+// ---------- Step 1 AI tasks (concepts and keywords) ----------
+
+const CONCEPT_LIMITS = Object.freeze({
+  QUESTION_MAX_CHARS: 1000,
+  FOLLOW_UP_MAX_CHARS: 300,
+  ANSWER_MAX_CHARS: 300,
+  CONTEXT_MAX_CHARS: 1000,
+  CONCEPT_NAME_MAX_CHARS: 150,
+  CONCEPT_TEXT_MAX_CHARS: 300,
+  MAX_CONCEPTS: 10,
+  MAX_EXISTING_CONCEPTS: 30,
+  MAX_SUGGESTED: 4,
+  MAX_FOLLOW_UPS: 4,
+  MAX_ANSWER_CONCEPTS: 4,
+  MAX_TERMS: 15,
+  MAX_VOCABULARY: 5,
+  TERM_MAX_CHARS: 150,
+});
+
+const CONCEPT_TASKS = Object.freeze(['analyzeQuestion', 'conceptsFromAnswer', 'generateKeywords']);
+const KEYWORD_STYLES = Object.freeze(['focused', 'balanced', 'comprehensive']);
+const QUESTION_TEMPLATES = Object.freeze(['PICO', 'PICOS', 'PEO', 'PCC', 'SPICE', 'SPIDER', 'ECLIPSE', 'CIMO']);
+const CONCEPT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+// Remove invisible control characters (except line breaks and tabs) from text typed by users
+function cleanUserText(value) {
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
+}
+
+function requireUserText(value, name, maxChars) {
+  const text = cleanUserText(requireText(value, name, maxChars));
+  if (!text) throw new ValidationError(`${name} is required`);
+  return text;
+}
+
+function optionalUserText(value, name, maxChars) {
+  const text = optionalText(value, name, maxChars);
+  return text === undefined ? '' : cleanUserText(text);
+}
+
+// Project details are optional hints for the AI: unusable values are ignored and
+// long ones are shortened, so old or unusual project data never blocks the request.
+function readConceptContext(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
+  const context = {};
+  for (const key of ['projectType', 'discipline', 'desiredOutcomes', 'undesiredOutcomes']) {
+    if (typeof value[key] === 'string') {
+      const text = cleanUserText(value[key]).slice(0, CONCEPT_LIMITS.CONTEXT_MAX_CHARS);
+      if (text) context[key] = text;
+    }
+  }
+  if (typeof value.questionTemplate === 'string') {
+    const template = value.questionTemplate.trim().toUpperCase();
+    if (QUESTION_TEMPLATES.includes(template)) context.questionTemplate = template;
+  }
+  return context;
+}
+
+// Names of concepts the researcher already has (a hint, so unusable items are skipped)
+function readConceptNames(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((name) => typeof name === 'string')
+    .map(cleanUserText)
+    .filter((name) => name && name.length <= CONCEPT_LIMITS.CONCEPT_NAME_MAX_CHARS)
+    .slice(0, CONCEPT_LIMITS.MAX_EXISTING_CONCEPTS);
+}
+
+function readKeywordConcepts(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new ValidationError('At least one concept is required');
+  }
+  if (value.length > CONCEPT_LIMITS.MAX_CONCEPTS) {
+    throw new ValidationError(`No more than ${CONCEPT_LIMITS.MAX_CONCEPTS} concepts at a time`);
+  }
+  const ids = new Set();
+  return value.map((item) => {
+    asObject(item, 'Concept');
+    if (typeof item.id !== 'string' || !CONCEPT_ID_PATTERN.test(item.id) || ids.has(item.id)) {
+      throw new ValidationError('Concept ID is invalid');
+    }
+    ids.add(item.id);
+    return { id: item.id, name: requireUserText(item.name, 'Concept name', CONCEPT_LIMITS.CONCEPT_NAME_MAX_CHARS) };
+  });
+}
+
+function readVocabulary(value) {
+  if (isMissing(value)) return { mesh: false, emtree: false };
+  asObject(value, 'Vocabulary');
+  return { mesh: value.mesh === true, emtree: value.emtree === true };
+}
+
+// Checks a Step 1 AI task request. Returns { task, input } with clean values only.
+function validateConceptTaskRequest(body) {
+  const data = asObject(body);
+  const task = requireOneOf(data.task, 'Task', CONCEPT_TASKS);
+  const context = readConceptContext(data.context);
+
+  if (task === 'analyzeQuestion') {
+    const question = requireUserText(data.question, 'Research question', CONCEPT_LIMITS.QUESTION_MAX_CHARS);
+    return { task, input: { question, context } };
+  }
+
+  const question = optionalUserText(data.question, 'Research question', CONCEPT_LIMITS.QUESTION_MAX_CHARS);
+
+  if (task === 'conceptsFromAnswer') {
+    return {
+      task,
+      input: {
+        question,
+        followUp: requireUserText(data.followUp, 'Follow-up question', CONCEPT_LIMITS.FOLLOW_UP_MAX_CHARS),
+        answer: requireUserText(data.answer, 'Answer', CONCEPT_LIMITS.ANSWER_MAX_CHARS),
+        existingConcepts: readConceptNames(data.existingConcepts),
+        context,
+      },
+    };
+  }
+
+  // generateKeywords
+  return {
+    task,
+    input: {
+      question,
+      concepts: readKeywordConcepts(data.concepts),
+      style: isMissing(data.style) ? 'balanced' : requireOneOf(data.style, 'Keyword style', KEYWORD_STYLES),
+      vocabulary: readVocabulary(data.vocabulary),
+      context,
+    },
+  };
+}
+
 module.exports = {
   ValidationError,
   LIMITS,
+  CONCEPT_LIMITS,
+  validateConceptTaskRequest,
   validateGeminiRequest,
   validateFanarRequest,
   validatePubMedRequest,

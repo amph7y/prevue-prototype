@@ -49,18 +49,19 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
         // This is a local copy of the query generation logic for instant feedback
         if (!keywordsObject) return '';
         const { syntax, searchFields } = DB_CONFIG[dbKey] || {};
-        const picoToKeywordMap = { p: 'population', i: 'intervention', c: 'comparison', o: 'outcome' };
 
         // Resolve the provided numeric searchField (if any) to the DB token (e.g. 'all', 'tiab', 'TITLE')
         const rawField = modalData?.searchField;
         const fieldToken = rawField !== undefined && searchFields ? (searchFields[String(rawField)] || rawField) : rawField;
 
-        const parts = ['p', 'i', 'c', 'o'].map(catKey => {
-            const keywordCategory = keywordsObject[picoToKeywordMap[catKey]];
+        // One group per concept, in order (works for any number of concepts)
+        const parts = Object.values(keywordsObject).map(keywordCategory => {
             if (!keywordCategory) return null;
+            const keywords = Array.isArray(keywordCategory.keywords) ? keywordCategory.keywords : [];
+            const vocabulary = Array.isArray(keywordCategory.controlled_vocabulary) ? keywordCategory.controlled_vocabulary : [];
             const activeTerms = [
-                ...keywordCategory.keywords.filter(k => k.active).map(k => syntax.phrase(k.term, fieldToken)),
-                ...keywordCategory.controlled_vocabulary.filter(v => v.active).map(v => syntax.phrase(v.term, fieldToken))
+                ...keywords.filter(k => k.active).map(k => syntax.phrase(k.term, fieldToken)),
+                ...vocabulary.filter(v => v.active).map(v => syntax.phrase(v.term, fieldToken))
             ];
             return activeTerms.length > 0 ? `(${activeTerms.join(' OR ')})` : null;
         }).filter(Boolean);
@@ -282,7 +283,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                                     <div className="space-y-5 p-4 border rounded-lg bg-gray-50">
                                         {newKeywords && Object.entries(newKeywords).map(([category, data]) => (
                                             <div key={category} className="bg-white rounded-lg p-4 border border-gray-200">
-                                                <h5 className="font-semibold text-sm text-gray-800 capitalize mb-3">{category}</h5>
+                                                <h5 className={cn('font-semibold text-sm text-gray-800 mb-3', !data.label && 'capitalize')}>{data.label || category}</h5>
                                                 <div className="flex flex-wrap gap-2">
                                                     {data.keywords.map((kw, i) => (
                                                         <button 
