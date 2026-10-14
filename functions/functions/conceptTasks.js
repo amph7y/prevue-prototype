@@ -22,12 +22,16 @@ class AiResponseError extends Error {
   }
 }
 
-// Longest AI reply allowed for each task (in tokens)
+// Longest AI reply allowed for each task (in tokens).
+// For keywords this is per group of concepts (see KEYWORD_GROUP_SIZE).
 const MAX_REPLY_TOKENS = Object.freeze({
-  analyzeQuestion: 800,
-  conceptsFromAnswer: 300,
+  analyzeQuestion: 1200,
+  conceptsFromAnswer: 500,
   generateKeywords: 2000,
 });
+
+// Long concept lists are sent to the AI in groups, so each reply stays within its length limit
+const KEYWORD_GROUP_SIZE = 8;
 
 // Same numbers the app used before
 const TERMS_PER_STYLE = Object.freeze({ focused: 3, balanced: 5, comprehensive: 10 });
@@ -118,18 +122,20 @@ function buildConceptsFromAnswerPrompt({ question, followUp, answer, existingCon
   };
   return `${ROLE}
 
-Your task: turn the researcher's answer to a follow-up question into searchable concepts.
+Your task: turn the researcher's answer to a follow-up question into searchable concepts. The researcher reviews your suggestions and chooses which ones to keep.
 
 ${DATA_RULE}
 
 ${inputBlock(data)}
 
 Instructions:
-- Split separate ideas into separate concepts. Example: the answer "Adults in Arab Countries" becomes "Adults" and "Arab Countries".
-- Keep the researcher's wording. Only fix obvious spelling mistakes.
+- Read "answer" together with "follow_up_question": the follow-up question tells you what kind of concepts are expected (for example age groups, countries, settings or study designs).
+- Specific answers: split separate ideas into separate concepts and keep the researcher's wording. Only fix obvious spelling mistakes. Example: the answer "Adults in Arab Countries" becomes "Adults" and "Arab Countries".
+- General answers that cover a whole group, such as "all", "any", "both", "everyone", "all ages", "no preference" or "worldwide": return the main specific concepts that the follow-up question asks about. Example: the follow-up "Which age groups?" answered with "all" becomes "Infants", "Children", "Adolescents", "Adults" and "Older adults".
+- Named groups: also return their members when that helps the search, and keep the group name. Example: "GCC countries" becomes "GCC countries", "Qatar", "Saudi Arabia", "United Arab Emirates", "Kuwait", "Bahrain" and "Oman".
+- If the answer rules the element out or has nothing searchable (for example "none", "not applicable" or "skip"), return an empty list.
 - Do not return concepts that are already in "existing_concepts".
-- If the answer has nothing searchable (for example "any", "not sure" or "no preference"), return an empty list.
-- Return at most ${L.MAX_ANSWER_CONCEPTS} concepts.
+- Return at most ${L.MAX_ANSWER_CONCEPTS} concepts, most important first.
 
 Return JSON in exactly this format:
 { "concepts": [ "concept" ] }
@@ -358,10 +364,38 @@ function readConceptTaskResult({ task, input }, text) {
   return RESULT_READERS[task](parseAiJson(text), input);
 }
 
+// ---------- Keyword groups ----------
+
+// Splits a checked generateKeywords task into tasks of at most KEYWORD_GROUP_SIZE concepts.
+// Every group keeps the same question, style, vocabulary and project details.
+function splitKeywordTask(task) {
+  const { concepts } = task.input;
+  const groups = [];
+  for (let start = 0; start < concepts.length; start += KEYWORD_GROUP_SIZE) {
+    groups.push({ task: task.task, input: { ...task.input, concepts: concepts.slice(start, start + KEYWORD_GROUP_SIZE) } });
+  }
+  return groups;
+}
+
+// Puts the groups' results back together, in the original concept order
+function mergeKeywordResults(task, results) {
+  const byId = new Map();
+  for (const result of results) {
+    for (const item of asList(result && result.concepts)) byId.set(item.id, item);
+  }
+  return {
+    concepts: task.input.concepts.map((concept) => byId.get(concept.id)
+      || { id: concept.id, terms: [], controlledVocabulary: [] }),
+  };
+}
+
 module.exports = {
   AiResponseError,
   MAX_REPLY_TOKENS,
+  KEYWORD_GROUP_SIZE,
   buildConceptTaskPrompt,
   readConceptTaskResult,
+  splitKeywordTask,
+  mergeKeywordResults,
   parseAiJson,
 };

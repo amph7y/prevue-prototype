@@ -27,7 +27,13 @@ const {
   validateDeleteUserRequest,
   validateConceptTaskRequest,
 } = require('./validation');
-const { AiResponseError, buildConceptTaskPrompt, readConceptTaskResult } = require('./conceptTasks');
+const {
+  AiResponseError,
+  buildConceptTaskPrompt,
+  readConceptTaskResult,
+  splitKeywordTask,
+  mergeKeywordResults,
+} = require('./conceptTasks');
 
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected
@@ -673,6 +679,38 @@ const askFanar = async (prompt, { model = FANAR_DEFAULT_MODEL, maxTokens }) => {
   return data?.choices?.[0]?.message?.content ?? "";
 };
 
+// Asks the AI for one Step 1 task and checks its reply
+const runConceptTaskOnce = async (task) => {
+  const { prompt, maxTokens } = buildConceptTaskPrompt(task);
+  const text = await askFanar(prompt, { maxTokens });
+  try {
+    return readConceptTaskResult(task, text);
+  } catch (error) {
+    // Log only the size: the reply can contain the researcher's content
+    logger.warn('Fanar task reply could not be used', {
+      task: task.task,
+      length: typeof text === 'string' ? text.length : 0,
+    });
+    throw error;
+  }
+};
+
+// A keyword group that fails is tried once more, but only if there is still
+// time to finish before the function's 2-minute limit
+const KEYWORD_RETRY_WINDOW_MS = 45000;
+const KEYWORD_RETRY_DELAY_MS = 1500;
+
+const runKeywordGroup = async (group, startedAt) => {
+  try {
+    return await runConceptTaskOnce(group);
+  } catch (error) {
+    if (Date.now() - startedAt > KEYWORD_RETRY_WINDOW_MS) throw error;
+    logger.warn('Keyword group failed, trying once more', { concepts: group.input.concepts.length });
+    await new Promise((resolve) => setTimeout(resolve, KEYWORD_RETRY_DELAY_MS));
+    return runConceptTaskOnce(group);
+  }
+};
+
 exports.callFanarApi = functions.https.onRequest(
   // Keyword replies can be long, so allow up to 2 minutes
   { secrets: ["FANAR_API_KEY"], timeoutSeconds: 120 },
@@ -683,18 +721,15 @@ exports.callFanarApi = functions.https.onRequest(
         // Step 1 AI tasks: the server writes the AI instructions and checks the reply
         if (req.body && typeof req.body === 'object' && req.body.task !== undefined) {
           const task = validateConceptTaskRequest(req.body);
-          const { prompt, maxTokens } = buildConceptTaskPrompt(task);
-          const text = await askFanar(prompt, { maxTokens });
-          try {
-            return res.json({ data: readConceptTaskResult(task, text) });
-          } catch (error) {
-            // Log only the size: the reply can contain the researcher's content
-            logger.warn('Fanar task reply could not be used', {
-              task: task.task,
-              length: typeof text === 'string' ? text.length : 0,
-            });
-            throw error;
+          if (task.task === 'generateKeywords') {
+            // Up to 8 concepts per AI call (so at most 4 calls for 25 concepts), all sent
+            // at the same time. If any group still fails after its retry, the whole
+            // request fails, so the browser does not count it as a keyword generation.
+            const startedAt = Date.now();
+            const results = await Promise.all(splitKeywordTask(task).map((group) => runKeywordGroup(group, startedAt)));
+            return res.json({ data: mergeKeywordResults(task, results) });
           }
+          return res.json({ data: await runConceptTaskOnce(task) });
         }
 
         // Older mode: the browser sends its own prompt. The new website no longer uses it,
