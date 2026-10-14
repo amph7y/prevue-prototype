@@ -88,9 +88,11 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
 
     const closeManageModal = () => setManageModal({ open: false, conceptId: null, type: 'keywords' });
 
-    const renderChips = (items, concept, type) => {
+    const renderChips = (items, concept, type, conceptIndex = 0) => {
         const visible = items.map((item, originalIndex) => ({ item, originalIndex })).slice(0, MAX_VISIBLE_CHIPS);
         const remaining = items.length - visible.length;
+        // Keywords use their concept's color (the same as in Step 1); controlled vocabulary has a dashed edge
+        const color = getConceptColor(concept, conceptIndex);
         return (
             <div className="flex flex-wrap gap-2 items-center">
                 {visible.map(({ item, originalIndex }) => (
@@ -98,7 +100,8 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                         key={originalIndex}
                         className={cn(
                             'inline-flex items-center gap-1 pl-2 pr-2.5 py-1 text-xs rounded-full border transition-colors',
-                            type === 'keywords' ? (item.active ? 'bg-main/10 border-main text-main' : 'bg-gray-100 border-gray-300 text-gray-500') : (item.active ? 'bg-teal-50 border-teal-300 text-teal-700' : 'bg-gray-100 border-gray-300 text-gray-500')
+                            item.active ? color.chip : 'bg-gray-100 border-gray-300 text-gray-500',
+                            type !== 'keywords' && 'border-dashed'
                         )}
                         title={item.term}
                     >
@@ -116,9 +119,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                             <span
                                 className={cn(
                                     'inline-flex items-center justify-center h-4 w-4 rounded-sm border-2 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-main/40',
-                                    type === 'keywords'
-                                        ? (item.active ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-gray-300')
-                                        : (item.active ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-gray-300')
+                                    item.active ? cn(color.dot, 'border-transparent text-white') : 'bg-white border-gray-300'
                                 )}
                                 aria-hidden="true"
                             >
@@ -156,7 +157,7 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                     if (!isActive(concept) || !concept.keywords || concept.keywords.length === 0) return null;
                     
                     return (
-                        <div key={concept.id} className="rounded-lg border bg-white p-6 shadow-sm">
+                        <div key={concept.id} className={cn('rounded-lg border border-l-4 bg-white p-6 shadow-sm', getConceptColor(concept, index).accent)} data-testid="keyword-card">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
@@ -176,28 +177,28 @@ const ConceptKeywordViewer = ({ concepts, actions }) => {
                                 <div>
                                     <div className="flex items-center mb-2">
                                         <h4 className="font-medium text-gray-700 flex items-center">
-                                            <span className="w-2 h-2 bg-main rounded-full mr-2"></span>
+                                            <span className={cn('w-2 h-2 rounded-full mr-2', getConceptColor(concept, index).dot)}></span>
                                             Keywords
                                         </h4>
                                     </div>
                                     <p className="text-xs text-gray-500 mb-2 mt-1">
                                         💡 Use <strong>Edit Keywords</strong> to customize and configure keywords
                                     </p>
-                                    {renderChips(concept.keywords, concept, 'keywords')}
+                                    {renderChips(concept.keywords, concept, 'keywords', index)}
                                 </div>
 
                                 {/* Controlled Vocabulary Section (compact chips) */}
                                 <div>
                                     <div className="flex items-center mb-2">
                                         <h4 className="font-medium text-gray-700 flex items-center">
-                                            <span className="w-2 h-2 bg-teal-500 rounded-full mr-2"></span>
+                                            <span className={cn('w-2 h-2 rounded-full mr-2 border border-dashed border-gray-500', getConceptColor(concept, index).dot)}></span>
                                             Controlled Vocabulary
                                         </h4>
                                     </div>
                                     {/* <p className="text-xs text-gray-500 mb-2 mt-1">
                                         💡 Use <strong>Manage All Concepts</strong> to customize and configure controlled vocabulary
                                     </p> */}
-                                    {renderChips(concept.controlled_vocabulary, concept, 'controlled_vocabulary')}
+                                    {renderChips(concept.controlled_vocabulary, concept, 'controlled_vocabulary', index)}
                                 </div>
                             </div>
                         </div>

@@ -82,11 +82,13 @@ const DB_CONFIG = {
     },
     embase: {
         name: 'Embase',
+        // Same numbered fields as the other databases (1 Title/Abstract, 2 Title, 3 Abstract, 4 All fields).
+        // Field 4 uses title, abstract and author keywords (ti,ab,kw), the usual choice for systematic searches.
         searchFields: {
-            'ti,ab,kw': 'Title/Abstract/Keyword',
-            'mp': 'All Fields (Multi-purpose)',
-            'ti': 'Title Only',
-            'ab': 'Abstract Only'
+            '1': 'ti,ab,kw',
+            '2': 'ti',
+            '3': 'ab',
+            '4': 'ti,ab,kw'
         },
         syntax: {
             // This syntax correctly uses the selected field, e.g., 'term':ti,ab,kw
@@ -99,9 +101,12 @@ const DB_CONFIG = {
     },
     googleScholar: {
         name: 'Google Scholar',
+        // Google Scholar can only limit a search to the title; the other fields search everything
         searchFields: {
-            'all': 'All Fields',
-            'intitle': 'Title Only'
+            '1': 'all',
+            '2': 'intitle',
+            '3': 'all',
+            '4': 'all'
         },
         syntax: {
             phrase: (term, field) => field === 'intitle' ? `intitle:"${term}"` : `"${term}"`,
