@@ -6,7 +6,6 @@ import { runConceptTask } from '../../api/fanarApi.js';
 
 // Config & Utils
 import { db } from '../../config/firebase.js';
-import { DB_CONFIG } from '../../config/dbConfig.js';
 import { useContextMenu } from '../../hooks/useContextMenu.jsx';
 import { cn } from '../../utils/cn.js';
 import { handleError } from '../../utils/utils.js';
@@ -37,10 +36,11 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
 import {
     MAX_ANSWER_CHARS,
-    MAX_CONCEPTS,
     MAX_QUESTION_CHARS,
     activeConcepts,
     addConcepts,
+    answerFollowUp,
+    answerSuggestionNames,
     appendExistingConcepts,
     applyKeywordResults,
     buildAiContext,
@@ -51,6 +51,14 @@ import {
     normalizeConceptAssist,
     normalizeLoadedConcepts,
 } from '../../utils/concepts.js';
+import { buildQuery } from '../../utils/queryBuilder.js';
+import {
+    isManualOnly,
+    normalizeManualCounts,
+    selectDatabasesWithCounts,
+    serializeManualCounts,
+    setManualCount,
+} from '../../utils/manualCounts.js';
 
 function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSignup, onLogin, userId }) {
     const { userAccessLevel } = useAuth();
@@ -70,6 +78,8 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
     const [queries, setQueries] = useState({});
     const [searchCounts, setSearchCounts] = useState({});
     const [searchTotals, setSearchTotals] = useState({}); // Store totals from actual search results
+    // Counts the researcher entered by hand, by database: { [dbKey]: { count, enteredAt, queryKey } }
+    const [manualCounts, setManualCounts] = useState({});
     const [searchResults, setSearchResults] = useState(null);
     const [initialArticles, setInitialArticles] = useState([]);
     const [deduplicationResult, setDeduplicationResult] = useState(null);
@@ -124,6 +134,9 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                 setResearchQuestion(savedDraft.researchQuestion || '');
                 setConcepts(normalizeLoadedConcepts(savedDraft.concepts));
                 setConceptAssist(normalizeConceptAssist(savedDraft.conceptAssist));
+                const savedCounts = normalizeManualCounts(savedDraft.manualCounts);
+                setManualCounts(savedCounts);
+                setSelectedDBs((prev) => selectDatabasesWithCounts(prev, savedCounts, { maxDatabases: capabilities.maxDatabases, isGuest: true }));
                 setNegativeKeywords(savedDraft.negativeKeywords || ['']);
                 setKeywordStyle(savedDraft.keywordStyle || 'balanced');
                 setConceptsGenerated(savedDraft.conceptsGenerated || false);
@@ -145,6 +158,10 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
 
                 setConcepts(normalizeLoadedConcepts(data.concepts));
                 setConceptAssist(normalizeConceptAssist(data.conceptAssist));
+                // Databases with a saved count are selected again, so the counts stay visible
+                const savedCounts = normalizeManualCounts(data.manualCounts);
+                setManualCounts(savedCounts);
+                setSelectedDBs((prev) => selectDatabasesWithCounts(prev, savedCounts, { maxDatabases: capabilities.maxDatabases }));
                 setNegativeKeywords(data.negativeKeywords || ['']);
                 setKeywordStyle(data.keywordStyle || 'balanced');
 
@@ -172,6 +189,7 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                         conceptsGenerationCount,
                         keywordsGenerationCount,
                         conceptAssist,
+                        manualCounts: serializeManualCounts(manualCounts),
                         lastSaved: new Date().toISOString()
                     }));
                 } catch (error) {
@@ -192,12 +210,13 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                 conceptsGenerationCount,
                 keywordsGenerationCount,
                 conceptAssist,
+                manualCounts: serializeManualCounts(manualCounts),
                 lastSaved: serverTimestamp()
             };
             setDoc(docRef, dataToSave, { merge: true });
         }, 1000);
         return () => clearTimeout(debounceTimeout.current);
-    }, [researchQuestion, concepts, conceptAssist, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId, isGuestProject]);
+    }, [researchQuestion, concepts, conceptAssist, manualCounts, negativeKeywords, keywordStyle, conceptsGenerated, keywordsGenerated, conceptsGenerationCount, keywordsGenerationCount, project.id, userId, isGuestProject]);
 
     useEffect(() => {
         if (step === 2) {
@@ -284,18 +303,15 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
         }
     };
 
-    // The researcher answers an AI follow-up question; the answer becomes new concepts.
-    // Returns true when the answer was used.
+    // The researcher answers (or edits the answer to) an AI follow-up question.
+    // The AI's concepts from the answer wait under the question until the researcher
+    // adds them; nothing is added to the concept list here. Returns true when the answer was used.
     const handleAnswerFollowUp = async (followUpId, answerText) => {
         const answer = (answerText || '').trim();
         const followUp = conceptAssist.followUps.find((f) => f.id === followUpId);
         if (!followUp || !answer) return false;
         if (answer.length > MAX_ANSWER_CHARS) {
             toast.error(`Please keep your answer to ${MAX_ANSWER_CHARS} characters or fewer.`);
-            return false;
-        }
-        if (concepts.length >= MAX_CONCEPTS) {
-            toast.error(`You can have up to ${MAX_CONCEPTS} concepts. Remove or join some to add more.`);
             return false;
         }
 
@@ -308,19 +324,12 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                 existingConcepts: concepts.map((c) => c.name),
                 context: aiContext(),
             });
-            const items = (result.concepts || []).map((name) => ({ name, source: 'answer' }));
-            const preview = addConcepts(concepts, items);
-            setConcepts((prev) => addConcepts(prev, items).concepts);
-            setConceptAssist((prev) => ({
-                ...prev,
-                followUps: prev.followUps.map((f) => (f.id === followUpId ? { ...f, answer, status: 'answered' } : f)),
-            }));
+            const names = Array.isArray(result.concepts) ? result.concepts : [];
+            const count = answerSuggestionNames(names, concepts).length;
+            setConceptAssist((prev) => answerFollowUp(prev, followUpId, answer, names, concepts));
 
-            const addedCount = preview.added + preview.reactivated;
-            if (addedCount > 0) {
-                toast.success(`Added ${addedCount} concept${addedCount === 1 ? '' : 's'} from your answer.`);
-            } else if (preview.overLimit > 0) {
-                toast.error(`You can have up to ${MAX_CONCEPTS} concepts. Remove or join some to add more.`);
+            if (count > 0) {
+                toast.success(`${count} suggestion${count === 1 ? '' : 's'} from your answer. Add the ones you want.`);
             } else {
                 toast('No new concepts were found in your answer.');
             }
@@ -385,101 +394,25 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
         }
     };
 
-    const generateSingleQuery = (dbKey, enabledTypes = {}) => {
-        // Concepts the researcher turned off are left out of the search
-        const usableConcepts = activeConcepts(concepts);
-        if (usableConcepts.length === 0) return '';
-        const { syntax } = DB_CONFIG[dbKey];
+    // The query for one database. The Refine window uses the same builder, so both always match.
+    const generateSingleQuery = (dbKey, enabledTypes = {}) =>
+        buildQuery(dbKey, concepts, { enabledTypes, negativeKeywords }).text;
 
-        // Special handling for Semantic Scholar: keep it short and natural-language-like
-        if (dbKey === 'semanticScholar') {
-            // Prefer concept names; fallback to first active keyword per concept
-            const phrases = [];
-            usableConcepts.forEach(concept => {
-                const name = (concept.name || '').trim();
-                if (name) phrases.push(`"${name}"`);
-                if (phrases.length >= 6) return; // cap early if enough terms collected
-                const firstKeyword = (concept.keywords || []).find(k => k && k.active && (k.term || '').trim());
-                if (firstKeyword) phrases.push(`"${firstKeyword.term.trim()}"`);
-            });
-            // De-duplicate and cap to a safe number of phrases
-            const deduped = Array.from(new Set(phrases)).slice(0, 6);
-            let finalQuery = deduped.join(' ');
-
-            // Add negative terms using minus style
-            const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
-            if (activeNegative.length > 0) {
-                const ssNegatives = activeNegative.map(k => `-"${k}"`).join(' ');
-                finalQuery = `${finalQuery}${finalQuery ? ' ' : ''}${ssNegatives}`.trim();
-            }
-            return finalQuery;
-        }
-
-        const parts = [];
-
-        usableConcepts.forEach(concept => {
-            if (!concept.keywords || concept.keywords.length === 0) return;
-
-            let activeTerms = [];
-
-            // OPTIMIZED LOGIC FOR PUBMED: Combine controlled vocabulary and Keywords with OR
-            if (dbKey === 'pubmed') {
-                // Include controlled vocabulary terms based on enabled types
-                const controlledVocabTerms = concept.controlled_vocabulary
-                    .filter(v => v.active && enabledTypes[v.type.toLowerCase()])
-                    .map(v => syntax[v.type.toLowerCase()] ? syntax[v.type.toLowerCase()](v.term) : null)
-                    .filter(term => term !== null);
-
-                const keywordTerms = concept.keywords
-                    .filter(k => k.active)
-                    .map(k => {
-                        const searchField = k.searchField;
-
-                        const dbField = DB_CONFIG[dbKey].searchFields[searchField];
-                        return syntax.phrase(k.term, dbField);
-                    });
-
-                activeTerms = [...controlledVocabTerms, ...keywordTerms];
-
-            } else {
-                // ADVANCED LOGIC FOR ALL OTHER DATABASES
-                activeTerms = [
-                    ...concept.keywords.filter(k => k.active).map(k => {
-                        const searchField = k.searchField;
-                        const dbField = DB_CONFIG[dbKey].searchFields[searchField];
-
-                        return syntax.phrase(k.term, dbField);
-                    }),
-                    ...concept.controlled_vocabulary.filter(v => v.active && syntax[v.type.toLowerCase()]).map(v => syntax[v.type.toLowerCase()](v.term))
-                ];
-            }
-
-            if (activeTerms.length > 0) {
-                parts.push(`(${activeTerms.join(' OR ')})`);
-            }
-        });
-
-        let finalQuery = parts.join(`\n\n${syntax.separator}\n\n `);
-
-        const activeNegative = negativeKeywords.filter(k => k.trim() !== '');
-        if (activeNegative.length > 0) {
-            if (dbKey === 'semanticScholar') {
-                // Semantic Scholar supports minus for exclusion
-                const ssNegatives = activeNegative.map(k => `-"${k}"`).join(' ');
-                finalQuery = `${finalQuery}${finalQuery ? ' ' : ''}${ssNegatives}`.trim();
-            } else {
-                const negativePart = activeNegative.map(k => `"${k}"`).join(' OR ');
-                if (finalQuery) {
-                    finalQuery += ` ${syntax.not} (${negativePart})`;
-                }
-            }
-        }
-        return finalQuery.trim();
+    // A count the researcher entered for one database (null removes it). The query it was
+    // entered for is remembered, so the page can warn if the query changes later.
+    const handleSaveManualCount = (dbKey, count) => {
+        const query = generateSingleQuery(dbKey, enabledControlledVocabTypes);
+        setManualCounts((prev) => setManualCount(prev, dbKey, count, query));
     };
 
     const fetchAndSetCount = async (dbKey) => {
         const query = generateSingleQuery(dbKey, enabledControlledVocabTypes);
         setQueries(prev => ({ ...prev, [dbKey]: query }));
+        if (isManualOnly(dbKey)) {
+            // PreVue can't count these databases; the researcher enters the count by hand
+            setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'N/A', loading: false } }));
+            return;
+        }
         if (!capabilities.canSeeLiveCounts) {
             setSearchCounts(prev => ({ ...prev, [dbKey]: { count: 'N/A', loading: false } }));
             return;
@@ -529,6 +462,13 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
             return;
         }
 
+        // Embase and Google Scholar have no live search; their counts are entered by hand
+        const hasLiveDatabase = Object.keys(selectedDBs).some(dbKey => selectedDBs[dbKey] && !isManualOnly(dbKey));
+        if (!hasLiveDatabase) {
+            toast.error('Select at least one database PreVue can search: PubMed, Scopus, CORE or Semantic Scholar.');
+            return;
+        }
+
         setIsSearching(true);
         if (!isUpdate) {
             setDeduplicationResult(null);
@@ -547,7 +487,7 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
         let results = {};
         let allFetchedArticles = [];
 
-        const keys = Object.keys(currentQueries);
+        const keys = Object.keys(currentQueries).filter(dbKey => !isManualOnly(dbKey));
         const totals = {};
         const tasks = keys.map(dbKey => (async () => {
             const query = currentQueries[dbKey];
@@ -673,11 +613,13 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
         // Always use background export (capped or full), so we can fetch beyond visible page
         console.log('Starting background export...');
         const downloadName = generateExportFilename(project.name, format);
+        // Embase and Google Scholar are never searched, so they are left out of exports
+        const liveQueries = Object.fromEntries(Object.entries(queries).filter(([dbKey]) => !isManualOnly(dbKey)));
         addDownload({
             name: downloadName,
             format,
             options,
-            queries,
+            queries: liveQueries,
             searchTotals,
             progress: 0,
             totalRecords: 0,
@@ -865,8 +807,8 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                                 )}
                                 {step === 2 && (
                                     <QueryBuilder
-                                        state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, capabilities, isGuestProject }}
-                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup }}                                    />
+                                        state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, capabilities, isGuestProject, negativeKeywords, manualCounts }}
+                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup, onSaveManualCount: handleSaveManualCount }}                                    />
                                 )}
                                 {step === 3 && (
                                     <ResultsViewer

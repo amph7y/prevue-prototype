@@ -8,14 +8,17 @@ import toast from 'react-hot-toast';
 import logger from '../../utils/logger.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { getCapabilities } from '../../config/accessControl.js';
-
-const DISABLED_DBS = ['googleScholar', 'embase'];
+import { getConceptColor } from '../../utils/concepts.js';
+import { buildQuery } from '../../utils/queryBuilder.js';
+import { combinedTotal, isManualOnly } from '../../utils/manualCounts.js';
+import { ColoredQuery, ConceptLegend } from './QueryPreview.jsx';
+import ManualCountField from './ManualCountField.jsx';
 
 const QueryBuilder = ({ state, actions }) => {
     const { userAccessLevel } = useAuth();
     const capabilities = state.capabilities || getCapabilities(userAccessLevel);
-    const { queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, isGuestProject } = state;
-        const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup } = actions;
+    const { queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, isGuestProject, negativeKeywords = [], manualCounts = {} } = state;
+        const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup, onSaveManualCount } = actions;
 
     const notifyGuestLocked = () => {
         toast((t) => (
@@ -44,6 +47,25 @@ const QueryBuilder = ({ state, actions }) => {
             setActiveTab(availableDatabases[0]);
         }
     }, [availableDatabases, activeTab]);
+
+    // Concept names and colors, for the legend and the colored query
+    const conceptById = useMemo(() => new Map((concepts || []).map((c, i) => [c.id, { concept: c, index: i }])), [concepts]);
+    const colorFor = (id) => {
+        const found = conceptById.get(id);
+        return getConceptColor(found ? found.concept : null, found ? found.index : 0);
+    };
+    const nameFor = (id) => conceptById.get(id)?.concept.name || '';
+
+    // The active database's query in pieces, for coloring. It comes from the same builder as the
+    // query that is searched and copied; if they ever differ, the plain query is shown instead.
+    const activeQueryPieces = useMemo(() => (activeTab
+        ? buildQuery(activeTab, concepts, { enabledTypes: enabledControlledVocabTypes, negativeKeywords }).pieces
+        : []), [activeTab, concepts, enabledControlledVocabTypes, negativeKeywords]);
+
+    const activeQueryIsColored = activeQueryPieces.map((p) => p.text).join('') === (queries[activeTab] || '');
+
+    // Your entered count where there is one, otherwise the live count
+    const totals = combinedTotal(availableDatabases, { liveCounts: searchCounts, manualCounts, includeLive: capabilities.canSeeLiveCounts });
 
     const navButtons = (
         <div className="flex justify-between items-center">
@@ -91,9 +113,8 @@ const QueryBuilder = ({ state, actions }) => {
                     )}
                     <fieldset className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                         {Object.entries(DB_CONFIG).map(([key, { name }]) => {
-                            const isImplemented = !DISABLED_DBS.includes(key);
                             const isGuestLocked = isGuestProject && key !== 'pubmed';
-                            const isAllowed = isImplemented && !isGuestLocked;
+                            const isAllowed = !isGuestLocked;
                             const currentSelectedCount = Object.values(selectedDBs || {}).filter(Boolean).length;
                             const reachedLimit = currentSelectedCount >= (capabilities.maxDatabases || Infinity);
                             const disableCheckbox = isGuestLocked ? false : (!isAllowed || (!selectedDBs[key] && reachedLimit));
@@ -124,8 +145,8 @@ const QueryBuilder = ({ state, actions }) => {
                                         <label htmlFor={key} className={(isAllowed && !disableCheckbox) ? "font-medium text-gray-900" : "font-medium text-gray-400"}>{name}</label>
                                         {isGuestLocked ? (
                                             <div className="text-xs text-main cursor-pointer" onClick={notifyGuestLocked}>Create account to use</div>
-                                        ) : (!isImplemented && (
-                                            <div className="text-xs text-gray-400">Coming soon</div>
+                                        ) : (isManualOnly(key) && (
+                                            <div className="text-xs text-gray-500">Manual count only</div>
                                         ))}
                                     </div>
                                 </div>
@@ -144,24 +165,21 @@ const QueryBuilder = ({ state, actions }) => {
                         <h3 className="text-lg font-semibold text-gray-800 mb-3">Search Summary</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {/* Total Count */}
-                            <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm md:col-span-2 lg:col-span-3">
+                            <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm md:col-span-2 lg:col-span-3" data-testid="total-count">
                                 <div className="text-sm font-medium text-gray-500 mb-1">Total Results Across All Databases</div>
                                 <div className="text-4xl font-bold text-indigo-600">
-                                    {capabilities.canSeeLiveCounts ? (
-                                        (() => {
-                                            const total = availableDatabases.reduce((sum, dbKey) => {
-                                                const count = searchCounts[dbKey]?.count;
-                                                if (count !== undefined && count !== 'Error' && !isNaN(count)) {
-                                                    return sum + Number(count);
-                                                }
-                                                return sum;
-                                            }, 0);
-                                            return total.toLocaleString();
-                                        })()
+                                    {(capabilities.canSeeLiveCounts || totals.manual > 0) ? (
+                                        totals.total.toLocaleString()
                                     ) : (
-                                        <span className="text-base font-semibold text-gray-500">Upgrade to see live counts</span>
+                                        <span className="text-base font-semibold text-gray-500">Upgrade to see live counts, or enter your own counts below</span>
                                     )}
                                 </div>
+                                {totals.manual > 0 && (
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Includes {totals.manual} count{totals.manual === 1 ? '' : 's'} you entered
+                                        {capabilities.canSeeLiveCounts ? ', used instead of the live count.' : '. Upgrade to see live counts.'}
+                                    </p>
+                                )}
                             </div>
                             
                             {/* Individual Database Counts */}
@@ -170,8 +188,11 @@ const QueryBuilder = ({ state, actions }) => {
                                 const isLoading = searchCounts[dbKey]?.loading;
                                 
                                 return (
-                                    <div key={dbKey} className="bg-white p-3 rounded-lg border">
+                                    <div key={dbKey} className="bg-white p-3 rounded-lg border" data-testid={`count-card-${dbKey}`}>
                                         <div className="text-sm font-medium text-gray-500">{DB_CONFIG[dbKey]?.name || dbKey}</div>
+                                        {isManualOnly(dbKey) ? (
+                                            <div className="text-sm text-gray-500">No live count for this database. Run the search there and enter your count.</div>
+                                        ) : (
                                         <div className="text-lg font-semibold text-gray-800">
                                             {capabilities.canSeeLiveCounts ? (
                                                 isLoading ? (
@@ -188,6 +209,15 @@ const QueryBuilder = ({ state, actions }) => {
                                                 <span className="text-sm text-gray-500">Upgrade to view</span>
                                             )}
                                         </div>
+                                        )}
+                                        <ManualCountField
+                                            key={`${dbKey}:${manualCounts[dbKey] ? `${manualCounts[dbKey].count}:${manualCounts[dbKey].enteredAt}` : 'none'}`}
+                                            dbKey={dbKey}
+                                            dbName={DB_CONFIG[dbKey]?.name || dbKey}
+                                            query={queries[dbKey] || ''}
+                                            entry={manualCounts[dbKey]}
+                                            onSave={onSaveManualCount || (() => {})}
+                                        />
                                     </div>
                                 );
                             })}
@@ -281,64 +311,70 @@ const QueryBuilder = ({ state, actions }) => {
                                      </select> */}
                                 </div>
                                 <div className='flex items-center justify-end gap-x-2'>
-                                    <button
-                                        onClick={() => {
-                                            // Check if user has access to refine feature
-                                            if (!capabilities.canUseRefineFeature) {
-                                                if (isGuestProject) {
-                                                    notifyGuestLocked();
-                                                } else {
-                                                    toast.error('Query refinement is exclusive to premium users', {
-                                                        duration: 4000,
-                                                        icon: '🔒',
-                                                    });
+                                    {/* Refine needs live counts, which Embase and Google Scholar don't have */}
+                                    {!isManualOnly(activeTab) && (
+                                        <button
+                                            onClick={() => {
+                                                // Check if user has access to refine feature
+                                                if (!capabilities.canUseRefineFeature) {
+                                                    if (isGuestProject) {
+                                                        notifyGuestLocked();
+                                                    } else {
+                                                        toast.error('Query refinement is exclusive to premium users', {
+                                                            duration: 4000,
+                                                            icon: '🔒',
+                                                        });
+                                                    }
+                                                    return;
                                                 }
-                                                return;
-                                            }
 
-                                            // Build modal data expected by QueryRefinementModal:
-                                            // one group per concept that is turned on and has keywords, in order
-                                            const keywordsObject = {};
-                                            (concepts || [])
-                                                .filter(concept => concept && concept.active !== false && Array.isArray(concept.keywords) && concept.keywords.length > 0)
-                                                .forEach(concept => {
+                                                // Build modal data expected by QueryRefinementModal: one group per concept
+                                                // that is turned on, in order, with everything the shared query builder needs,
+                                                // so the Refine preview matches this page exactly
+                                                const refineConcepts = (concepts || []).filter(concept => concept && concept.active !== false);
+                                                const keywordsObject = {};
+                                                refineConcepts.forEach(concept => {
                                                     keywordsObject[concept.id] = {
                                                         label: concept.name,
-                                                        keywords: concept.keywords,
+                                                        colorIndex: Number.isInteger(concept.colorIndex) ? concept.colorIndex : concepts.indexOf(concept),
+                                                        keywords: Array.isArray(concept.keywords) ? concept.keywords : [],
                                                         controlled_vocabulary: Array.isArray(concept.controlled_vocabulary) ? concept.controlled_vocabulary : []
                                                     };
                                                 });
 
-                                            const modalData = {
-                                                dbKey: activeTab,
-                                                keywords: keywordsObject,
-                                                currentCount: searchCounts?.[activeTab]?.count ?? 'N/A',
-                                                searchField: 4
-                                            };
+                                                const modalData = {
+                                                    dbKey: activeTab,
+                                                    keywords: keywordsObject,
+                                                    order: refineConcepts.map(concept => concept.id),
+                                                    enabledTypes: { ...(enabledControlledVocabTypes || {}) },
+                                                    negativeKeywords: Array.isArray(negativeKeywords) ? [...negativeKeywords] : [],
+                                                    currentCount: searchCounts?.[activeTab]?.count ?? 'N/A'
+                                                };
 
-                                            setRefineModalData(modalData);
-                                        }}
-                                        disabled={!capabilities.canUseRefineFeature}
-                                        className={`inline-flex items-center gap-x-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset transition-colors ${
-                                            capabilities.canUseRefineFeature
-                                                ? 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 cursor-pointer'
-                                                : 'bg-gray-50 text-gray-400 ring-gray-200 cursor-not-allowed'
-                                        }`}
-                                        title={!capabilities.canUseRefineFeature ? '🔒 Premium feature - Upgrade to unlock' : 'Refine your query'}
-                                    >
-                                        {!capabilities.canUseRefineFeature && (
-                                            <svg className="h-3.5 w-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                                            </svg>
-                                        )}
-                                        <SparklesIcon className={`h-4 w-4 ${capabilities.canUseRefineFeature ? 'text-purple-500' : 'text-gray-300'}`}/>
-                                        Refine
-                                        {!capabilities.canUseRefineFeature && (
-                                            <span className="ml-1 text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 px-1.5 py-0.5 rounded-full font-medium border border-amber-200">
-                                                Premium
-                                            </span>
-                                        )}
-                                    </button>
+                                                setRefineModalData(modalData);
+                                            }}
+                                            disabled={!capabilities.canUseRefineFeature}
+                                            className={`inline-flex items-center gap-x-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset transition-colors ${
+                                                capabilities.canUseRefineFeature
+                                                    ? 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 cursor-pointer'
+                                                    : 'bg-gray-50 text-gray-400 ring-gray-200 cursor-not-allowed'
+                                            }`}
+                                            title={!capabilities.canUseRefineFeature ? '🔒 Premium feature - Upgrade to unlock' : 'Refine your query'}
+                                        >
+                                            {!capabilities.canUseRefineFeature && (
+                                                <svg className="h-3.5 w-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                                </svg>
+                                            )}
+                                            <SparklesIcon className={`h-4 w-4 ${capabilities.canUseRefineFeature ? 'text-purple-500' : 'text-gray-300'}`}/>
+                                            Refine
+                                            {!capabilities.canUseRefineFeature && (
+                                                <span className="ml-1 text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 px-1.5 py-0.5 rounded-full font-medium border border-amber-200">
+                                                    Premium
+                                                </span>
+                                            )}
+                                        </button>
+                                    )}
                                     <button 
                                         onClick={async () => {
                                             const q = queries[activeTab] || '';
@@ -361,12 +397,13 @@ const QueryBuilder = ({ state, actions }) => {
                                             {DB_CONFIG[activeTab]?.name || activeTab}
                                         </div>
                                     </div>
-                                    <textarea 
-                                        rows={10} 
-                                        className="block w-full rounded-md border-blue-200 bg-blue-50 font-mono text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none" 
-                                        value={queries[activeTab] || ''} 
-                                        readOnly 
+                                    <ConceptLegend pieces={activeQueryIsColored ? activeQueryPieces : []} nameFor={nameFor} colorFor={colorFor} className="mb-3" />
+                                    <ColoredQuery
+                                        query={queries[activeTab] || ''}
+                                        pieces={activeQueryPieces}
+                                        colorFor={colorFor}
                                         placeholder="Query will be generated based on your concepts and selected options..."
+                                        className="max-h-72 min-h-[10rem] overflow-y-auto rounded-md border border-blue-200 bg-blue-50 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>

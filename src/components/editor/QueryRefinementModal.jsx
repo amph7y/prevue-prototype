@@ -15,9 +15,13 @@ import { loadHistoryFromFirestore, saveSnapshotToFirestore, clearHistoryInFirest
 import logger from '../../utils/logger.js';
 import { compareQueries } from '../../utils/queryComparison';
 import QueryComparisonDisplay from './QueryComparisonDisplay';
+import { buildQuery, conceptsFromKeywordGroups } from '../../utils/queryBuilder.js';
+import { getConceptColor } from '../../utils/concepts.js';
+import { ColoredQuery, ConceptLegend } from './QueryPreview.jsx';
 
 const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
     const [editedQuery, setEditedQuery] = useState('');
+    const [editedPieces, setEditedPieces] = useState([]);
     const [newKeywords, setNewKeywords] = useState(null);
     const [suggestions, setSuggestions] = useState(null);
     const [history, setHistory] = useState([]);
@@ -45,35 +49,27 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
         }
     }, [modalData]);
 
-    const generateQueryFromKeywords = (dbKey, keywordsObject) => {
-        // This is a local copy of the query generation logic for instant feedback
-        if (!keywordsObject) return '';
-        const { syntax, searchFields } = DB_CONFIG[dbKey] || {};
-
-        // Resolve the provided numeric searchField (if any) to the DB token (e.g. 'all', 'tiab', 'TITLE')
-        const rawField = modalData?.searchField;
-        const fieldToken = rawField !== undefined && searchFields ? (searchFields[String(rawField)] || rawField) : rawField;
-
-        // One group per concept, in order (works for any number of concepts)
-        const parts = Object.values(keywordsObject).map(keywordCategory => {
-            if (!keywordCategory) return null;
-            const keywords = Array.isArray(keywordCategory.keywords) ? keywordCategory.keywords : [];
-            const vocabulary = Array.isArray(keywordCategory.controlled_vocabulary) ? keywordCategory.controlled_vocabulary : [];
-            const activeTerms = [
-                ...keywords.filter(k => k.active).map(k => syntax.phrase(k.term, fieldToken)),
-                ...vocabulary.filter(v => v.active).map(v => syntax.phrase(v.term, fieldToken))
-            ];
-            return activeTerms.length > 0 ? `(${activeTerms.join(' OR ')})` : null;
-        }).filter(Boolean);
-        return parts.join(` ${syntax.separator} `);
-    };
+    // The preview uses the same query builder as the main query page, so both always match:
+    // same order, search fields, MeSH terms, excluded terms and line layout
+    const buildPreview = (keywordsObject) => buildQuery(
+        modalData.dbKey,
+        conceptsFromKeywordGroups(keywordsObject, modalData.order),
+        { enabledTypes: modalData.enabledTypes || {}, negativeKeywords: modalData.negativeKeywords || [] }
+    );
 
     useEffect(() => {
         if (newKeywords && modalData) {
-            const query = generateQueryFromKeywords(modalData.dbKey, newKeywords);
-            setEditedQuery(query);
+            const built = buildPreview(newKeywords);
+            setEditedQuery(built.text);
+            setEditedPieces(built.pieces);
         }
     }, [newKeywords, modalData]);
+
+    // Concept names and colors, for the legend and the colored preview. A query loaded from
+    // history has no pieces that match it, so it is shown without colors.
+    const nameFor = (id) => modalData?.keywords?.[id]?.label || '';
+    const colorFor = (id) => getConceptColor({ colorIndex: modalData?.keywords?.[id]?.colorIndex }, 0);
+    const previewIsColored = editedPieces.map((p) => p.text).join('') === editedQuery;
 
     const diffTimeoutRef = useRef(null);
     useEffect(() => {
@@ -281,9 +277,14 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                             <div className="max-h-[calc(95vh-350px)] overflow-y-auto">
                                 {activeTab === 'keywords' ? (
                                     <div className="space-y-5 p-4 border rounded-lg bg-gray-50">
-                                        {newKeywords && Object.entries(newKeywords).map(([category, data]) => (
+                                        {newKeywords && Object.entries(newKeywords)
+                                            .filter(([, data]) => data && ((data.keywords || []).length > 0 || (data.controlled_vocabulary || []).length > 0))
+                                            .map(([category, data]) => (
                                             <div key={category} className="bg-white rounded-lg p-4 border border-gray-200">
-                                                <h5 className={cn('font-semibold text-sm text-gray-800 mb-3', !data.label && 'capitalize')}>{data.label || category}</h5>
+                                                <h5 className={cn('flex items-center gap-2 font-semibold text-sm text-gray-800 mb-3', !data.label && 'capitalize')}>
+                                                    <span className={cn('inline-block h-2.5 w-2.5 rounded-full', colorFor(category).dot)} aria-hidden="true" />
+                                                    {data.label || category}
+                                                </h5>
                                                 <div className="flex flex-wrap gap-2">
                                                     {data.keywords.map((kw, i) => (
                                                         <button 
@@ -291,7 +292,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                                                             onClick={() => handleKeywordToggle(category, 'keywords', i)} 
                                                             className={cn(
                                                                 'inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition-all',
-                                                                kw.active ? 'bg-main/10 text-main ring-1 ring-main/20' : 'bg-gray-100 text-gray-600 line-through hover:bg-gray-200'
+                                                                kw.active ? cn('border', colorFor(category).chip) : 'bg-gray-100 text-gray-600 line-through hover:bg-gray-200'
                                                             )}
                                                         >
                                                             {kw.term}
@@ -303,7 +304,7 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                                                             onClick={() => handleKeywordToggle(category, 'controlled_vocabulary', i)} 
                                                             className={cn(
                                                                 'inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition-all',
-                                                                vocab.active ? 'bg-green-100 text-green-800 ring-1 ring-green-300' : 'bg-gray-100 text-gray-600 line-through hover:bg-gray-200'
+                                                                vocab.active ? cn('border border-dashed', colorFor(category).chip) : 'bg-gray-100 text-gray-600 line-through hover:bg-gray-200'
                                                             )}
                                                         >
                                                             {vocab.term}
@@ -406,11 +407,13 @@ const QueryRefinementModal = ({ modalData, onClose, onApplyChanges }) => {
                         <div className="col-span-1">
                             <h4 className="font-semibold text-lg text-gray-800 mb-4">Query Preview</h4>
                     <div className="space-y-4">
-                                <textarea 
-                                    rows={10} 
-                                    className="block w-full rounded-lg border-gray-300 bg-gray-50 shadow-sm sm:text-sm font-mono p-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                                    value={editedQuery} 
-                                    readOnly 
+                                <ConceptLegend pieces={previewIsColored ? editedPieces : []} nameFor={nameFor} colorFor={colorFor} />
+                                <ColoredQuery
+                                    query={editedQuery}
+                                    pieces={editedPieces}
+                                    colorFor={colorFor}
+                                    placeholder="Turn on at least one keyword to build a query."
+                                    className="max-h-72 min-h-[10rem] overflow-y-auto rounded-lg border border-gray-300 bg-gray-50 p-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                                 
                                 <div className="space-y-3">

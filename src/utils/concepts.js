@@ -14,25 +14,26 @@ const MAX_PARTS = MAX_CONCEPTS; // pieces of one concept in the question (a cap 
 export const conceptLimitMessage = () => `You can have up to ${MAX_CONCEPTS} concepts. Remove or join some to add more.`;
 
 // Class names are written out in full so Tailwind includes them in the build.
+// accent is the colored left edge of a concept's keyword card.
 // The first 10 colors keep their order, so saved projects keep their colors.
 export const CONCEPT_PALETTE = [
-    { chip: 'bg-green-100 text-green-900 border-green-300', dot: 'bg-green-500', ring: 'ring-green-500' },
-    { chip: 'bg-orange-100 text-orange-900 border-orange-300', dot: 'bg-orange-500', ring: 'ring-orange-500' },
-    { chip: 'bg-violet-100 text-violet-900 border-violet-300', dot: 'bg-violet-500', ring: 'ring-violet-500' },
-    { chip: 'bg-yellow-100 text-yellow-900 border-yellow-300', dot: 'bg-yellow-500', ring: 'ring-yellow-500' },
-    { chip: 'bg-sky-100 text-sky-900 border-sky-300', dot: 'bg-sky-500', ring: 'ring-sky-500' },
-    { chip: 'bg-rose-100 text-rose-900 border-rose-300', dot: 'bg-rose-500', ring: 'ring-rose-500' },
-    { chip: 'bg-teal-100 text-teal-900 border-teal-300', dot: 'bg-teal-500', ring: 'ring-teal-500' },
-    { chip: 'bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300', dot: 'bg-fuchsia-500', ring: 'ring-fuchsia-500' },
-    { chip: 'bg-lime-100 text-lime-900 border-lime-300', dot: 'bg-lime-500', ring: 'ring-lime-500' },
-    { chip: 'bg-indigo-100 text-indigo-900 border-indigo-300', dot: 'bg-indigo-500', ring: 'ring-indigo-500' },
-    { chip: 'bg-blue-100 text-blue-900 border-blue-300', dot: 'bg-blue-500', ring: 'ring-blue-500' },
-    { chip: 'bg-pink-100 text-pink-900 border-pink-300', dot: 'bg-pink-500', ring: 'ring-pink-500' },
-    { chip: 'bg-emerald-100 text-emerald-900 border-emerald-300', dot: 'bg-emerald-500', ring: 'ring-emerald-500' },
-    { chip: 'bg-purple-100 text-purple-900 border-purple-300', dot: 'bg-purple-500', ring: 'ring-purple-500' },
-    { chip: 'bg-cyan-100 text-cyan-900 border-cyan-300', dot: 'bg-cyan-500', ring: 'ring-cyan-500' },
-    { chip: 'bg-amber-100 text-amber-900 border-amber-300', dot: 'bg-amber-500', ring: 'ring-amber-500' },
-    { chip: 'bg-red-100 text-red-900 border-red-300', dot: 'bg-red-500', ring: 'ring-red-500' },
+    { chip: 'bg-green-100 text-green-900 border-green-300', dot: 'bg-green-500', ring: 'ring-green-500', accent: 'border-l-green-500' },
+    { chip: 'bg-orange-100 text-orange-900 border-orange-300', dot: 'bg-orange-500', ring: 'ring-orange-500', accent: 'border-l-orange-500' },
+    { chip: 'bg-violet-100 text-violet-900 border-violet-300', dot: 'bg-violet-500', ring: 'ring-violet-500', accent: 'border-l-violet-500' },
+    { chip: 'bg-yellow-100 text-yellow-900 border-yellow-300', dot: 'bg-yellow-500', ring: 'ring-yellow-500', accent: 'border-l-yellow-500' },
+    { chip: 'bg-sky-100 text-sky-900 border-sky-300', dot: 'bg-sky-500', ring: 'ring-sky-500', accent: 'border-l-sky-500' },
+    { chip: 'bg-rose-100 text-rose-900 border-rose-300', dot: 'bg-rose-500', ring: 'ring-rose-500', accent: 'border-l-rose-500' },
+    { chip: 'bg-teal-100 text-teal-900 border-teal-300', dot: 'bg-teal-500', ring: 'ring-teal-500', accent: 'border-l-teal-500' },
+    { chip: 'bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300', dot: 'bg-fuchsia-500', ring: 'ring-fuchsia-500', accent: 'border-l-fuchsia-500' },
+    { chip: 'bg-lime-100 text-lime-900 border-lime-300', dot: 'bg-lime-500', ring: 'ring-lime-500', accent: 'border-l-lime-500' },
+    { chip: 'bg-indigo-100 text-indigo-900 border-indigo-300', dot: 'bg-indigo-500', ring: 'ring-indigo-500', accent: 'border-l-indigo-500' },
+    { chip: 'bg-blue-100 text-blue-900 border-blue-300', dot: 'bg-blue-500', ring: 'ring-blue-500', accent: 'border-l-blue-500' },
+    { chip: 'bg-pink-100 text-pink-900 border-pink-300', dot: 'bg-pink-500', ring: 'ring-pink-500', accent: 'border-l-pink-500' },
+    { chip: 'bg-emerald-100 text-emerald-900 border-emerald-300', dot: 'bg-emerald-500', ring: 'ring-emerald-500', accent: 'border-l-emerald-500' },
+    { chip: 'bg-purple-100 text-purple-900 border-purple-300', dot: 'bg-purple-500', ring: 'ring-purple-500', accent: 'border-l-purple-500' },
+    { chip: 'bg-cyan-100 text-cyan-900 border-cyan-300', dot: 'bg-cyan-500', ring: 'ring-cyan-500', accent: 'border-l-cyan-500' },
+    { chip: 'bg-amber-100 text-amber-900 border-amber-300', dot: 'bg-amber-500', ring: 'ring-amber-500', accent: 'border-l-amber-500' },
+    { chip: 'bg-red-100 text-red-900 border-red-300', dot: 'bg-red-500', ring: 'ring-red-500', accent: 'border-l-red-500' },
 ];
 
 export const INACTIVE_CHIP = 'bg-gray-100 text-gray-400 border-gray-200 line-through';
