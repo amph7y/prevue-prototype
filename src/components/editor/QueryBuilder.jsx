@@ -18,7 +18,7 @@ const QueryBuilder = ({ state, actions }) => {
     const { userAccessLevel } = useAuth();
     const capabilities = state.capabilities || getCapabilities(userAccessLevel);
     const { queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, isGuestProject, negativeKeywords = [], manualCounts = {} } = state;
-        const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup, onSaveManualCount } = actions;
+        const { setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData, setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup, onSaveManualCount, onOpenTranslator } = actions;
 
     const notifyGuestLocked = () => {
         toast((t) => (
@@ -153,7 +153,21 @@ const QueryBuilder = ({ state, actions }) => {
                             );
                         })}
                     </fieldset>
-                    
+
+                    {onOpenTranslator && (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                            <p className="text-sm text-gray-600">
+                                Searching other databases too? Translate this search for Ovid, Embase, Cochrane, CINAHL, Web of Science and more.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => onOpenTranslator(buildQuery('pubmed', concepts, { enabledTypes: enabledControlledVocabTypes, negativeKeywords }).text)}
+                                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                            >
+                                Translate for other databases
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

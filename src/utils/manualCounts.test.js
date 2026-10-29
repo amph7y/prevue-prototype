@@ -147,7 +147,7 @@ test('databaseLink: Google Scholar only takes short searches', () => {
 });
 
 test('databaseLink: unknown databases get no link', () => {
-    for (const db of ['webOfScience', '__proto__', 'constructor', '', null, undefined]) {
+    for (const db of ['notADatabase', '__proto__', 'constructor', 'hasOwnProperty', '', null, undefined]) {
         assert.equal(databaseLink(db, 'q'), null, String(db));
     }
 });

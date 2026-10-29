@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DownloadIcon } from './Icons.jsx';
 import { useGlobalDownload } from '../../contexts/GlobalDownloadContext.jsx';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { SHOW_PRICING } from '../../config/features.js';
 
 function Header({
   title = "ReVue",
@@ -76,7 +77,7 @@ function Header({
           {/* Center: Nav */}
           {showNav && (
             <nav className="hidden md:flex items-center justify-center gap-7 flex-1">
-              {navItems.map((item) => {
+              {navItems.filter((item) => SHOW_PRICING || item.id !== 'pricing').map((item) => {
                 const isActive = activeSection === item.id;
                 return (
                   <button

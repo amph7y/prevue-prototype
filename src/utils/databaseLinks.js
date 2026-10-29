@@ -16,6 +16,13 @@ const DATABASE_SITES = Object.freeze({
         search: 'https://scholar.google.com/scholar?q=',
         maxQueryChars: GOOGLE_SCHOLAR_MAX_CHARS,
     },
+    // Used by the Search Translator. Most of these need access through your library.
+    ovidMedline: { home: 'https://ovidsp.ovid.com/' },
+    embaseOvid: { home: 'https://ovidsp.ovid.com/' },
+    psycinfo: { home: 'https://ovidsp.ovid.com/' },
+    cochrane: { home: 'https://www.cochranelibrary.com/' },
+    cinahl: { home: 'https://search.ebscohost.com/' },
+    webOfScience: { home: 'https://www.webofscience.com/' },
 });
 
 // Returns { href, prefilled, tooLong }, or null for an unknown database.

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header.jsx';
+import { SHOW_PRICING } from '../../config/features.js';
 import { CONTACT_US_GOOGLE_FORM_CONFIG, RATE_LIMIT_CONFIG, validateContactForm } from '../../config/contactUs.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import SignupModal from '../../components/common/SignupModal.jsx';
 
-function LandingPage({ onGetStarted, onGoToAdmin }) {
+function LandingPage({ onGetStarted, onGoToAdmin, onOpenTranslator }) {
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [contactUsFeedbackMessage, setContactUsFeedbackMessage] = useState({ state: 'none', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -409,6 +410,14 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
                 Admin Dashboard
               </button>
             )}
+            {onOpenTranslator && (
+              <button
+                onClick={onOpenTranslator}
+                className="hidden sm:inline-flex items-center gap-x-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Search Translator
+              </button>
+            )}
             <button
               onClick={() => onGetStarted(true)}
               className="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-main px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-main-dark"
@@ -450,6 +459,15 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
                   >
                     Try Beta Version
                   </button>
+
+                  {onOpenTranslator && (
+                    <button
+                      onClick={onOpenTranslator}
+                      className="rounded-xl bg-white px-8 py-4 text-base font-bold text-gray-800 border border-gray-200 shadow-sm hover:bg-gray-50"
+                    >
+                      Search Translator
+                    </button>
+                  )}
 
                   <button
                     onClick={() => scrollToSection('how-it-works')}
@@ -820,77 +838,56 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
                 </a>
               </div>
 
-              {/* Tool 2: Academic AI Writer */}
-              <div className="relative rounded-2xl p-7 bg-white/5 border border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20 transition-all duration-300">
+              {/* Tool 2: Search Translator (LIVE) */}
+              <div className="relative rounded-2xl p-7 bg-white/5 border border-main/60 ring-1 ring-main/20 hover:shadow-glow transition-all duration-300">
+                <div className="absolute top-0 right-0 bg-main text-text-dark text-xs font-extrabold px-3 py-1 rounded-bl-xl rounded-tr-2xl">
+                  LIVE
+                </div>
+
                 <div className="mb-6">
                   <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
-                    {/* Pen icon */}
-                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-sky-400" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
+                    {/* Translate icon */}
+                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-main" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.05 0C9.2 9.2 6.9 12.3 3.5 14.5M6 9.5c1.5 2 3.4 3.5 5.5 4.5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12.5 21l4.5-10 4.5 10M14 17.5h6" />
                     </svg>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 mb-3">
-                  <h4 className="text-xl font-extrabold text-white">Academic AI Writer</h4>
-                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
-                    Coming Soon
-                  </span>
-                </div>
-
-                <p className="text-white/65 text-sm leading-relaxed">
-                  Assists in the scientific manuscript writing process with citation-aware drafting and editing.
+                <h4 className="text-xl font-extrabold text-white mb-3">Search Translator</h4>
+                <p className="text-white/70 text-sm leading-relaxed mb-6">
+                  Paste a search from any database, or write a research question, and get it ready for PubMed, Ovid, Embase, Cochrane, CINAHL, Web of Science, Scopus and more.
                 </p>
+
+                {onOpenTranslator && (
+                  <button
+                    type="button"
+                    onClick={onOpenTranslator}
+                    className="inline-flex items-center gap-2 text-white font-bold text-sm hover:text-main transition-colors"
+                  >
+                    Open Search Translator <span aria-hidden>→</span>
+                  </button>
+                )}
               </div>
 
-              {/* Tool 3: Gap Finder */}
-              <div className="relative rounded-2xl p-7 bg-white/5 border border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20 transition-all duration-300">
-                <div className="mb-6">
-                  <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
-                    {/* Map pin icon */}
-                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-purple-400" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-4.35 7-11a7 7 0 10-14 0c0 6.65 7 11 7 11z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10a2 2 0 100-4 2 2 0 000 4z" />
+              {/* Tools 3 and 4: not announced yet */}
+              {[1, 2].map((n) => (
+                <div
+                  key={n}
+                  className="relative flex min-h-[16rem] flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-7 text-center"
+                  data-testid="tool-coming-soon"
+                >
+                  <div className="mb-4 h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
+                    {/* Sparkle icon */}
+                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-white/40" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
                     </svg>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-3 mb-3">
-                  <h4 className="text-xl font-extrabold text-white">Gap Finder</h4>
-                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-xs font-semibold text-white/70">
                     Coming Soon
                   </span>
                 </div>
-
-                <p className="text-white/65 text-sm leading-relaxed">
-                  Map the understudied areas and future study recommendations in the scientific community.
-                </p>
-              </div>
-
-              {/* Tool 4: ReApply */}
-              <div className="relative rounded-2xl p-7 bg-white/5 border border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20 transition-all duration-300">
-                <div className="mb-6">
-                  <div className="h-14 w-14 rounded-xl flex items-center justify-center bg-white/5 border border-white/10">
-                    {/* Paper plane icon */}
-                    <svg viewBox="0 0 24 24" className="h-7 w-7 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M22 2l-7 20-4-9-9-4 20-7z" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 mb-3">
-                  <h4 className="text-xl font-extrabold text-white">ReApply</h4>
-                  <span className="inline-flex items-center rounded-full bg-white/10 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
-                    Coming Soon
-                  </span>
-                </div>
-
-                <p className="text-white/65 text-sm leading-relaxed">
-                  Streamline applying your manuscript to multiple journals with automated formatting.
-                </p>
-              </div>
+              ))}
             </div>
           </div>
         </section>
@@ -991,7 +988,8 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
           </div>
         </div>
 
-        {/* Pricing Section */}
+        {/* Pricing Section: hidden for now (SHOW_PRICING in src/config/features.js) */}
+        {SHOW_PRICING && (
         <section
           ref={pricingRef}
           data-section="pricing"
@@ -1128,6 +1126,7 @@ function LandingPage({ onGetStarted, onGoToAdmin }) {
             </div>
           </div>
         </section>
+        )}
 
 
         {/* better Way Section */}
