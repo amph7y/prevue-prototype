@@ -13,11 +13,19 @@ import Spinner from './components/common/Spinner.jsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import { GlobalDownloadProvider } from './contexts/GlobalDownloadContext.jsx';
 import DownloadCenter from './components/common/DownloadCenter.jsx';
+import Header from './components/common/Header.jsx';
+import SearchTranslator from './components/tools/SearchTranslator.jsx';
 
 function AppContent() {
   const { user, loading, isAuthenticated, userId, isAdmin } = useAuth();
   const [activeProject, setActiveProject] = React.useState(null);
   const [currentView, setCurrentView] = React.useState('landing');
+  // Where the Search Translator's back button goes
+  const [translatorReturnView, setTranslatorReturnView] = React.useState('landing');
+  // A research question typed before signing in (kept in memory only), and whether to go back
+  // to the Search Translator after signing in
+  const [translatorText, setTranslatorText] = React.useState('');
+  const [returnToTranslator, setReturnToTranslator] = React.useState(false);
 
   const createGuestProject = () => ({
     id: 'guest-preview',
@@ -61,7 +69,8 @@ function AppContent() {
           if (activeProject?.isGuest) {
             setActiveProject(null);
           }
-          setCurrentView('dashboard');
+          setCurrentView(returnToTranslator ? 'translator' : 'dashboard');
+          setReturnToTranslator(false);
         } else if (currentView === 'guestEditor') {
           setActiveProject(null);
           setCurrentView('dashboard');
@@ -70,7 +79,7 @@ function AppContent() {
         setActiveProject(null);
       }
     }
-  }, [isAuthenticated, loading, currentView, activeProject]);
+  }, [isAuthenticated, loading, currentView, activeProject, returnToTranslator]);
 
   if (loading) {
     return (
@@ -105,6 +114,7 @@ function AppContent() {
     if (activeProject?.isGuest) {
       setActiveProject(null);
     }
+    setReturnToTranslator(false);
     setCurrentView('landing');
   };
 
@@ -117,7 +127,8 @@ function AppContent() {
     if (activeProject?.isGuest) {
       setActiveProject(null);
     }
-    setCurrentView('dashboard');
+    setCurrentView(returnToTranslator ? 'translator' : 'dashboard');
+    setReturnToTranslator(false);
   };
 
   const handleRegisterSuccess = () => {
@@ -140,10 +151,54 @@ function AppContent() {
     setCurrentView('dashboard');
   };
 
+  // The Search Translator works for everyone, guests included; nothing is sent to the server.
+  // Each page that opens it says where Back should return to.
+  const openTranslatorFrom = (returnView) => () => {
+    setTranslatorReturnView(returnView);
+    setTranslatorText('');
+    setCurrentView('translator');
+  };
+
+  // Turning a question into searches needs an account: sign in, then come back to the question
+  const handleTranslatorLogin = (question) => {
+    setTranslatorText(typeof question === 'string' ? question : '');
+    setReturnToTranslator(true);
+    setCurrentView('login');
+  };
+
+  const handleCloseTranslator = () => {
+    const back = translatorReturnView;
+    // Go back to a page the user can still see (for example after signing out on this page)
+    if (back === 'dashboard' && !isAuthenticated) setCurrentView('landing');
+    else if (back === 'guestDashboard' && isAuthenticated) setCurrentView('dashboard');
+    else setCurrentView(back || 'landing');
+  };
+
+  if (currentView === 'translator') {
+    return (
+      <GlobalDownloadProvider currentProjectId={null}>
+        <div className="min-h-screen bg-gray-50">
+          <Header
+            title="Search Translator"
+            onBackButtonClicked={handleCloseTranslator}
+            backButtonText="Back"
+            onLogoClick={handleBackToLanding}
+          />
+          <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+            <div className="rounded-lg bg-white p-6 shadow md:p-8">
+              <SearchTranslator initialQuery={translatorText} onRequireLogin={isAuthenticated ? null : handleTranslatorLogin} />
+            </div>
+          </main>
+        </div>
+        <DownloadCenter />
+      </GlobalDownloadProvider>
+    );
+  }
+
   if (currentView === 'landing') {
     return (
       <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
-         <LandingPage onGetStarted={handleGetStarted} onGoToAdmin={isAdmin ? handleGoToAdmin : null} />
+         <LandingPage onGetStarted={handleGetStarted} onGoToAdmin={isAdmin ? handleGoToAdmin : null} onOpenTranslator={openTranslatorFrom('landing')} />
         <DownloadCenter />
       </GlobalDownloadProvider>
     );
@@ -174,6 +229,7 @@ function AppContent() {
           onStartGuestProject={handleStartGuestProject}
           onBackToLanding={handleBackToLanding}
           onLogin={() => setCurrentView('login')}
+          onOpenTranslator={openTranslatorFrom('guestDashboard')}
           userId={null}
           user={null}
         />
@@ -223,6 +279,7 @@ function AppContent() {
             user={user}
             onBackToLanding={handleBackToLanding}
             onGoToAdmin={isAdmin ? handleGoToAdmin : null}
+            onOpenTranslator={openTranslatorFrom('dashboard')}
           />
         )}
         <DownloadCenter />
@@ -232,7 +289,7 @@ function AppContent() {
 
   return (
     <GlobalDownloadProvider currentProjectId={activeProject?.id || null}>
-       <LandingPage onGetStarted={handleGetStarted} onGoToAdmin={isAdmin ? handleGoToAdmin : null} />
+       <LandingPage onGetStarted={handleGetStarted} onGoToAdmin={isAdmin ? handleGoToAdmin : null} onOpenTranslator={openTranslatorFrom('landing')} />
       <DownloadCenter />
     </GlobalDownloadProvider>
   );

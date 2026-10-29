@@ -52,6 +52,7 @@ import {
     normalizeLoadedConcepts,
 } from '../../utils/concepts.js';
 import { buildQuery } from '../../utils/queryBuilder.js';
+import SearchTranslatorModal from '../tools/SearchTranslatorModal.jsx';
 import {
     isManualOnly,
     normalizeManualCounts,
@@ -80,6 +81,8 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
     const [searchTotals, setSearchTotals] = useState({}); // Store totals from actual search results
     // Counts the researcher entered by hand, by database: { [dbKey]: { count, enteredAt, queryKey } }
     const [manualCounts, setManualCounts] = useState({});
+    // The Search Translator window (null when closed), opened from Step 2 with the PubMed search
+    const [translatorQuery, setTranslatorQuery] = useState(null);
     const [searchResults, setSearchResults] = useState(null);
     const [initialArticles, setInitialArticles] = useState([]);
     const [deduplicationResult, setDeduplicationResult] = useState(null);
@@ -774,6 +777,13 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                     setRefineModalData(null);
                 }}
             />
+            {translatorQuery !== null && (
+                <SearchTranslatorModal
+                    initialQuery={translatorQuery}
+                    onClose={() => setTranslatorQuery(null)}
+                    onRequireLogin={onRequireLogin ? () => { setTranslatorQuery(null); onRequireLogin(); } : null}
+                />
+            )}
             {selectedArticle && <ArticleDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
             {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} allArticles={initialArticles} hasDeduplicated={!!deduplicationResult} onExport={exportHandler} />}
 
@@ -808,7 +818,7 @@ function ProjectEditor({ project, onBackToDashboard, onRequireLogin, onRequireSi
                                 {step === 2 && (
                                     <QueryBuilder
                                         state={{ queries, searchCounts, isSearching, selectedDBs, concepts, enabledControlledVocabTypes, capabilities, isGuestProject, negativeKeywords, manualCounts }}
-                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup, onSaveManualCount: handleSaveManualCount }}                                    />
+                                        actions={{ setStep, handleRunSearch, handleDbSelectionChange, setRefineModalData: (data) => setRefineModalData({ ...data, projectId: project.id }), setEnabledControlledVocabTypes, onRequireLogin, onRequireSignup, onSaveManualCount: handleSaveManualCount, onOpenTranslator: setTranslatorQuery }}                                    />
                                 )}
                                 {step === 3 && (
                                     <ResultsViewer

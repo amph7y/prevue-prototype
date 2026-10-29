@@ -16,7 +16,7 @@ import Header from '../common/Header.jsx';
 import { checkLifetimeProjectLimit, formatResetDate, debugLifetimeLimit, testLifetimeCalculation, recordProjectCreationEvent } from '../../utils/projectLimits.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
-function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin, isGuest = false, onStartGuestProject, onLogin }) {
+function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGoToAdmin, isGuest = false, onStartGuestProject, onLogin, onOpenTranslator }) {
 
     const { userAccessLevel } = useAuth();
     const [projects, setProjects] = useState([]);
@@ -253,6 +253,14 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                                     >
                                         Start Preview Project
                                     </button>
+                                    {onOpenTranslator && (
+                                        <button
+                                            onClick={onOpenTranslator}
+                                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                                        >
+                                            Search Translator
+                                        </button>
+                                    )}
                                     <button
                                         onClick={onLogin}
                                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
@@ -363,6 +371,15 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                                         )}
                                     </div>
                                 </div>
+                                <div className="flex flex-wrap items-center gap-3">
+                                {onOpenTranslator && (
+                                    <button
+                                        onClick={onOpenTranslator}
+                                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                                    >
+                                        Search Translator
+                                    </button>
+                                )}
                                 <button 
                                     onClick={handleCreateProjectClick}
                                     disabled={isCreating || (userAccessLevel === 'free' && !projectLimit.canCreate)}
@@ -371,6 +388,7 @@ function ProjectDashboard({ onSelectProject, userId, user, onBackToLanding, onGo
                                     <FolderPlusIcon className="h-5 w-5 transition-transform group-hover:scale-110" />
                                     <span>{(userAccessLevel === 'free' && !projectLimit.canCreate) ? 'Limit Reached' : 'Create Project'}</span>
                                 </button>
+                                </div>
                             </div>
                             
                             {!projectLimit.canCreate && userAccessLevel === 'free' && (
